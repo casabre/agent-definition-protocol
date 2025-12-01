@@ -1,8 +1,8 @@
 import assert from "assert";
 import fs from "fs";
 import path from "path";
-import { createPackage, openPackage } from "../src/adpkg.ts";
-import { validateAdp } from "../src/validation.ts";
+import { createPackage, openPackage } from "../src/adpkg.js";
+import { validateAdp } from "../src/validation.js";
 
 function buildSource(tmp: string) {
   const adpDir = path.join(tmp, "adp");

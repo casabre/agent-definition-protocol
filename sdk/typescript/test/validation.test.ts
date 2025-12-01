@@ -1,4 +1,4 @@
-import { validateAdp } from "../src/validation.ts";
+import { validateAdp } from "../src/validation.js";
 
 const valid = {
   adp_version: "0.1.0",

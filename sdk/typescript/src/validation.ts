@@ -8,7 +8,8 @@ const ajv = new Ajv({ allErrors: true, strict: false, validateSchema: false });
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 function loadSchema(name: string) {
-  const base = path.resolve(__dirname, "../../../schemas", name);
+  // Move from dist-test/src or dist/src back to repository root.
+  const base = path.resolve(__dirname, "../../../../schemas", name);
   return JSON.parse(fs.readFileSync(base, "utf8"));
 }
 

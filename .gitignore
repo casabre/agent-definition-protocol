@@ -17,6 +17,7 @@ dist/
 sdk/python/coverage.xml
 sdk/typescript/coverage/
 sdk/typescript/node_modules/
+sdk/typescript/dist*
 sdk/typescript/ts-oci*
 sdk/rust/coverage.lcov
 sdk/rust/target/

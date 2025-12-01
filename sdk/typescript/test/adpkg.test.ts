@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import assert from "assert";
-import { createPackage, openPackage } from "../src/adpkg.ts";
+import { createPackage, openPackage } from "../src/adpkg.js";
 
 function buildSource(tmp: string) {
   const adpDir = path.join(tmp, "adp");

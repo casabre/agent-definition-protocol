@@ -3,7 +3,7 @@ import path from "path";
 import * as tar from "tar";
 import crypto from "crypto";
 import yaml from "js-yaml";
-import { validateAdp } from "./validation.ts";
+import { validateAdp } from "./validation.js";
 
 const OCI_LAYOUT = { imageLayoutVersion: "1.0.0" };
 const MANIFEST_MEDIA_TYPE = "application/vnd.oci.image.manifest.v1+json";
