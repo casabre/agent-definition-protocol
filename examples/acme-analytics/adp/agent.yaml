@@ -1,25 +1,16 @@
-adp_version: "0.1"
+adp_version: "0.2.0"
 id: "agent.acme.analytics"
 name: "Acme Analytics Agent"
 description: "Answers analytic questions over Acme telemetry and metrics."
 owner: "acme-labs"
 tags: ["analytics", "demo", "telemetry"]
 runtime:
-  framework: "langgraph"
-  entrypoint: "acme_agents.main:app"
-  language: "python"
-  image:
-    registry: "ghcr.io"
-    repository: "acme/analytics-agent"
-    tag: "0.1.0"
-    digest: "sha256:exampledigest"
-  models:
-    - provider: "openai"
-      name: "gpt-4o"
-      purpose: "generation"
-    - provider: "openai"
-      name: "text-embedding-3-large"
-      purpose: "embedding"
+  execution:
+    - backend: "python"
+      id: "acme-python-agent"
+      entrypoint: "acme_agents.main:app"
+      env:
+        ACME_ENV: "dev"
 skills:
   - id: "answer"
     name: "Answer telemetry questions"
@@ -29,7 +20,6 @@ skills:
       - "What is the p95 latency for service api?"
     input_modes: ["text"]
     output_modes: ["text"]
-    handler: "acme_agents.skills.answer:run"
 interop:
   a2a:
     ref: "./docs/agentcard.json"
@@ -57,24 +47,28 @@ memory:
 evaluation:
   suites:
     - id: "regression_basic"
-      runner: "custom"
-      config_path: "eval/regression_basic.yaml"
-      metrics: ["accuracy", "latency"]
-      thresholds:
-        accuracy: 0.85
+      description: "Basic regression checks"
+      evaluators:
+        - id: "deterministic-basic"
+          type: "deterministic"
+          function: "acme_evals.regression_basic"
+          rubric: "Return stable answers"
+          scoring: "boolean"
+          threshold: "true"
     - id: "groundedness_q1"
-      runner: "custom"
-      config_path: "eval/groundedness_q1.yaml"
-      metrics: ["groundedness"]
-  promotion_policy:
-    require_passing_suites:
-      - "regression_basic"
-      - "groundedness_q1"
-  kpis:
-    - id: "accuracy-core"
-      name: "Core accuracy"
-      description: "Accuracy across core regression suite"
-      url: "https://dash.acme.example/kpi/accuracy-core"
+      description: "Groundedness"
+      evaluators:
+        - id: "llm-judge"
+          type: "llm_judge"
+          model: "gpt-4o"
+          rubric: "Grounded with citations"
+          scoring: "0-1"
+          threshold: 0.8
+kpis:
+  - id: "accuracy-core"
+    name: "Core accuracy"
+    description: "Accuracy across core regression suite"
+    url: "https://dash.acme.example/kpi/accuracy-core"
       target: 0.9
       unit: "ratio"
 governance:

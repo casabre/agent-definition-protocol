@@ -1,0 +1,10 @@
+adp_version: "0.2.0"
+id: "acme.example.simple-agent"
+runtime:
+  execution:
+    - backend: "custom"
+      id: "acme-external-http"
+      type: "external-http"
+      endpoint: "https://api.acme.ai/simple-agent/run"
+flow: {}
+evaluation: {}

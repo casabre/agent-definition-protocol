@@ -1,6 +1,6 @@
 # ACS Specification Overview
 
-The Agent Container Spec (ACS) defines how to build and run containers for ADP agents. See `specification/core/acs-v0.1.md` and schema `specification/schemas/acs-v0.1.schema.json` for details.
+The Agent Container Spec (ACS) defines how to build and run containers for ADP agents. See `specification/core/acs-v0.1.md` (legacy) and schema `schemas/acs.schema.json` for details.
 
 Highlights:
 

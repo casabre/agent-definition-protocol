@@ -33,6 +33,6 @@ jobs:
       - name: Example package roundtrip
         run: |
           source .venv/bin/activate
-          adp validate --adp examples/acme-analytics/adp/agent.yaml --acs examples/acme-analytics/acs/container.yaml
+          adp validate --adp examples/adp/acme-full-agent.yaml --acs examples/acme-analytics/acs/container.yaml
           adp pack --agent examples/acme-analytics/adp/agent.yaml --acs examples/acme-analytics/acs/container.yaml --src examples/acme-analytics/src --eval examples/acme-analytics/eval --out /tmp/acme.adpkg
           adp unpack --pkg /tmp/acme.adpkg --out /tmp/unpacked

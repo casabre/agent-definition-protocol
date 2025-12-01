@@ -17,18 +17,14 @@ console = Console()
 
 
 def _schema_dir() -> Path:
-    # Schemas live under specification/schemas relative to repo root.
-    return Path(__file__).resolve().parents[2] / "specification" / "schemas"
+    # Schemas live under /schemas relative to repo root.
+    return Path(__file__).resolve().parents[2] / "schemas"
 
 
 @app.command()
 def validate(
-    adp: Annotated[
-        Path | None, typer.Option("--adp", help="Path to ADP manifest")
-    ] = None,
-    acs: Annotated[
-        Path | None, typer.Option("--acs", help="Path to ACS spec")
-    ] = None,
+    adp: Annotated[Path | None, typer.Option("--adp", help="Path to ADP manifest")] = None,
+    acs: Annotated[Path | None, typer.Option("--acs", help="Path to ACS spec")] = None,
 ) -> None:
     """Validate ADP and/or ACS files against schemas."""
     if not adp and not acs:
@@ -39,14 +35,14 @@ def validate(
     success = True
     if adp:
         try:
-            validate_file(adp, schema_base / "adp-v0.1.schema.json")
+            validate_file(adp, schema_base / "adp.schema.json")
             console.print(f"✅ ADP valid: {adp}")
         except Exception as exc:  # pragma: no cover - simple surface
             success = False
             console.print(f"❌ ADP invalid: {adp}\n  {exc}")
     if acs:
         try:
-            validate_file(acs, schema_base / "acs-v0.1.schema.json")
+            validate_file(acs, schema_base / "acs.schema.json")
             console.print(f"✅ ACS valid: {acs}")
         except Exception as exc:  # pragma: no cover - simple surface
             success = False

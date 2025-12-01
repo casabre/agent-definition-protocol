@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/flow.schema.json",
+  "title": "AFG Flow v0.1",
+  "type": "object",
+  "oneOf": [
+    { "type": "object", "maxProperties": 0 },
+    {
+      "type": "object",
+      "required": ["id", "graph"],
+      "properties": {
+        "id": {"type": "string"},
+        "graph": {
+          "type": "object",
+          "required": ["nodes", "edges", "start_nodes", "end_nodes"],
+          "properties": {
+            "nodes": {
+              "type": "array",
+              "minItems": 1,
+              "items": {"$ref": "#/definitions/node"}
+            },
+            "edges": {
+              "type": "array",
+              "items": {"$ref": "#/definitions/edge"}
+            },
+            "start_nodes": {
+              "type": "array",
+              "items": {"type": "string"}
+            },
+            "end_nodes": {
+              "type": "array",
+              "items": {"type": "string"}
+            }
+          },
+          "additionalProperties": false
+        },
+        "extensions": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    }
+  ],
+  "definitions": {
+    "ui": {
+      "type": "object",
+      "properties": {
+        "label": {"type": "string"},
+        "icon": {"type": "string"},
+        "color": {"type": "string"},
+        "position": {
+          "type": "object",
+          "properties": {
+            "x": {"type": "number"},
+            "y": {"type": "number"}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "node": {
+      "type": "object",
+      "required": ["id", "kind"],
+      "properties": {
+        "id": {"type": "string"},
+        "kind": {
+          "type": "string",
+          "enum": ["input", "output", "llm", "tool", "router", "retriever", "evaluator", "subflow"]
+        },
+        "label": {"type": "string"},
+        "model_ref": {"type": "string"},
+        "system_prompt_ref": {"type": "string"},
+        "strategy": {"type": "string"},
+        "params": {"type": "object", "additionalProperties": true},
+        "ui": {"$ref": "#/definitions/ui"},
+        "extensions": {"type": "object", "additionalProperties": true}
+      },
+      "additionalProperties": false
+    },
+    "edge": {
+      "type": "object",
+      "required": ["from", "to"],
+      "properties": {
+        "from": {"type": "string"},
+        "to": {"type": "string"},
+        "condition": {"type": "string"}
+      },
+      "additionalProperties": false
+    }
+  }
+}

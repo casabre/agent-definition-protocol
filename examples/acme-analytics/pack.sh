@@ -6,4 +6,4 @@ adp pack \
   --acs ./acs/container.yaml \
   --src ./src \
   --eval ./eval \
-  --out acme-analytics-0.1.0.adpkg
+  --out acme-analytics-0.2.0.adpkg

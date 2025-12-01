@@ -1,6 +1,6 @@
 # ADP Specification Overview
 
-ADP is a portable manifest for defining AI agents across frameworks and runtimes. The normative text lives in `specification/core/adp-v0.1.md` and is backed by `specification/schemas/adp-v0.1.schema.json`.
+ADP is a portable manifest for defining AI agents across frameworks and runtimes. The normative text lives in `spec/` and is backed by `schemas/adp.schema.json`.
 
 Key concepts:
 

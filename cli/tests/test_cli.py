@@ -9,19 +9,18 @@ runner = CliRunner()
 
 
 MIN_ADP = """
-adp_version: "0.1"
+adp_version: "0.2.0"
 id: "agent.test"
 name: "Test Agent"
 description: "A test agent"
 owner: "example"
 tags: ["test"]
 runtime:
-  framework: "langgraph"
-  entrypoint: "agent.main:app"
-  language: "python"
-  models:
-    - provider: "openai"
-      name: "gpt-4o"
+  execution:
+    - backend: "python"
+      id: "python-backend"
+      entrypoint: "agent.main:app"
+flow: {}
 skills:
   - id: "echo"
     name: "Echo"
@@ -31,10 +30,14 @@ skills:
 evaluation:
   suites:
     - id: "basic"
-      runner: "custom"
-      config_path: "eval/basic.yaml"
-  promotion_policy:
-    require_passing_suites: ["basic"]
+      description: "Basic eval"
+      metrics:
+        - id: "deterministic-basic"
+          type: "deterministic"
+          function: "tests.basic"
+          rubric: "echoes back"
+          scoring: "boolean"
+          threshold: "true"
 deployment:
   environments:
     - name: "dev"
@@ -68,7 +71,7 @@ def test_validate_success(tmp_path: Path) -> None:
 def test_validate_failure(tmp_path: Path) -> None:
     # Missing required runtime will fail validation
     adp_path = tmp_path / "bad_agent.yaml"
-    adp_path.write_text("adp_version: '0.1'\nname: missing required fields")
+    adp_path.write_text("adp_version: '0.2.0'\nname: missing required fields")
 
     result = runner.invoke(app, ["validate", "--adp", str(adp_path)])
 
