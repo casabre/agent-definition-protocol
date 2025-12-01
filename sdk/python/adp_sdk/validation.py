@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 from typing import List
 
-import yaml
 from jsonschema import Draft202012Validator, RefResolver
 
 from .adp_model import ADP
@@ -22,9 +21,15 @@ def validate_adp(adp: ADP) -> List[str]:
     schema = _load_schema("adp.schema.json")
     base_uri = (SCHEMA_DIR / "adp.schema.json").resolve().as_uri()
     store = {
-        (SCHEMA_DIR / "runtime.schema.json").resolve().as_uri(): _load_schema("runtime.schema.json"),
-        (SCHEMA_DIR / "flow.schema.json").resolve().as_uri(): _load_schema("flow.schema.json"),
-        (SCHEMA_DIR / "evaluation.schema.json").resolve().as_uri(): _load_schema("evaluation.schema.json"),
+        (SCHEMA_DIR / "runtime.schema.json").resolve().as_uri(): _load_schema(
+            "runtime.schema.json"
+        ),
+        (SCHEMA_DIR / "flow.schema.json").resolve().as_uri(): _load_schema(
+            "flow.schema.json"
+        ),
+        (SCHEMA_DIR / "evaluation.schema.json").resolve().as_uri(): _load_schema(
+            "evaluation.schema.json"
+        ),
     }
     resolver = RefResolver(base_uri=base_uri, referrer=schema, store=store)
     validator = Draft202012Validator(schema, resolver=resolver)

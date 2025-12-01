@@ -69,12 +69,16 @@ class ADPackage:
         return f"sha256:{h}", len(data)
 
     @classmethod
-    def create_from_directory(cls, src: str | Path, out_path: str | Path) -> "ADPackage":
+    def create_from_directory(
+        cls, src: str | Path, out_path: str | Path
+    ) -> "ADPackage":
         src_path = Path(src)
         out_dir = Path(out_path)
         out_dir.mkdir(parents=True, exist_ok=True)
         if out_dir.suffix != "":
-            raise ValueError("OCI layout is a directory; provide a directory path, not a file")
+            raise ValueError(
+                "OCI layout is a directory; provide a directory path, not a file"
+            )
 
         adp_path = src_path / "adp" / "agent.yaml"
         adp = ADP.from_file(adp_path)
@@ -84,7 +88,9 @@ class ADPackage:
         blobs.mkdir(parents=True, exist_ok=True)
 
         # Config blob (minimal metadata)
-        config_bytes = json.dumps({"agent_id": adp.id, "adp_version": adp.adp_version}).encode()
+        config_bytes = json.dumps(
+            {"agent_id": adp.id, "adp_version": adp.adp_version}
+        ).encode()
         config_digest, config_size = cls._hash_bytes(config_bytes)
         config_path = cls._blob_path(out_dir / "blobs", config_digest)
         config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -143,10 +149,16 @@ class ADPackage:
         index = json.loads((self.path / "index.json").read_text())
         manifest_desc = index["manifests"][0]
         manifest = json.loads(
-            (self.path / "blobs" / manifest_desc["digest"].replace("sha256:", "sha256/")).read_text()
+            (
+                self.path
+                / "blobs"
+                / manifest_desc["digest"].replace("sha256:", "sha256/")
+            ).read_text()
         )
         layer_desc = manifest["layers"][0]
-        layer_path = self.path / "blobs" / layer_desc["digest"].replace("sha256:", "sha256/")
+        layer_path = (
+            self.path / "blobs" / layer_desc["digest"].replace("sha256:", "sha256/")
+        )
         with tarfile.open(layer_path, "r") as tar:
             member = tar.extractfile("adp/agent.yaml")
             if not member:
