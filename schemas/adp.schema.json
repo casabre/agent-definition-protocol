@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/adp.schema.json",
+  "title": "Agent Definition Protocol v0.1.0",
+  "type": "object",
+  "required": ["adp_version", "id", "runtime", "flow", "evaluation"],
+  "properties": {
+    "adp_version": {"type": "string", "const": "0.1.0"},
+    "id": {"type": "string", "minLength": 1},
+    "name": {"type": "string"},
+    "description": {"type": "string"},
+    "owner": {"type": "string"},
+    "tags": {"type": "array", "items": {"type": "string"}},
+    "runtime": {"$ref": "runtime.schema.json"},
+    "flow": {"$ref": "flow.schema.json"},
+    "prompts": {
+      "type": "object",
+      "properties": {
+        "system": {"type": "string"},
+        "roles": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": true
+    },
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "object",
+          "required": ["id", "name", "description"],
+          "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "name": {"type": "string"},
+          "description": {"type": "string"},
+          "input_modes": {"type": "array", "items": {"type": "string"}},
+          "output_modes": {"type": "array", "items": {"type": "string"}},
+          "examples": {"type": "array", "items": {"type": "string"}},
+          "tags": {"type": "array", "items": {"type": "string"}}
+        },
+        "additionalProperties": true
+      }
+    },
+    "interop": {
+      "type": "object",
+      "properties": {
+        "a2a": {
+          "type": "object",
+          "properties": {
+            "ref": {"type": "string"},
+            "agentcard": {"type": "object"}
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "tools": {
+      "type": "object",
+      "properties": {
+        "mcp_servers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "description", "transport", "endpoint"],
+            "properties": {
+              "id": {"type": "string"},
+              "description": {"type": "string"},
+              "transport": {"type": "string"},
+              "endpoint": {"type": "string"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "http_apis": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "description", "base_url"],
+            "properties": {
+              "id": {"type": "string"},
+              "description": {"type": "string"},
+              "base_url": {"type": "string"},
+              "auth": {"type": "string"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "sql_functions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "description", "connection"],
+            "properties": {
+              "id": {"type": "string"},
+              "description": {"type": "string"},
+              "connection": {"type": "string"},
+              "schema": {"type": "string"}
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "memory": {
+      "type": "object",
+      "properties": {
+        "provider": {"type": "string"},
+        "endpoint": {"type": "string"},
+        "index": {"type": "string"},
+        "namespace": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "guardrails": {
+      "type": "object",
+      "properties": {
+        "policies": {"type": "array", "items": {"type": "string"}},
+        "telemetry_endpoint": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "evaluation": {"$ref": "evaluation.schema.json"},
+    "kpis": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "description", "url"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "name": {"type": "string"},
+          "description": {"type": "string"},
+          "url": {"type": "string", "format": "uri"},
+          "target": {"type": ["string", "number"]},
+          "unit": {"type": "string"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "governance": {
+      "type": "object",
+      "properties": {
+        "identity": {"type": "string"},
+        "allowed_data_scopes": {"type": "array", "items": {"type": "string"}},
+        "forbidden_data_scopes": {"type": "array", "items": {"type": "string"}},
+        "telemetry_endpoint": {"type": "string", "format": "uri"},
+        "guardrail_policy_set": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "deployment": {
+      "type": "object",
+      "properties": {
+        "environments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "endpoint"],
+            "properties": {
+              "name": {"type": "string", "minLength": 1},
+              "endpoint": {"type": "string", "format": "uri"}
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

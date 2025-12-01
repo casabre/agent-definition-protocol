@@ -1,0 +1,6 @@
+suite: "langgraph_basic"
+description: "Basic regression checks for LangGraph agent"
+tasks:
+  - id: "hello"
+    input: {}
+    expected_contains: "Hello from LangGraph"

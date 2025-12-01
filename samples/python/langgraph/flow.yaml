@@ -1,0 +1,27 @@
+id: "acme.langgraph.flow"
+graph:
+  nodes:
+    - id: "input"
+      kind: "input"
+      ui:
+        label: "User Input"
+    - id: "invoke-graph"
+      kind: "tool"
+      params:
+        tool_id: "langgraph-backend"
+      ui:
+        label: "Run LangGraph"
+    - id: "output"
+      kind: "output"
+      ui:
+        label: "Output"
+  edges:
+    - from: "input"
+      to: "invoke-graph"
+    - from: "invoke-graph"
+      to: "output"
+  start_nodes: ["input"]
+  end_nodes: ["output"]
+extensions:
+  x_vendor:
+    layout: "linear"

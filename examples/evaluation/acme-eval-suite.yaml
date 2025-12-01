@@ -1,0 +1,30 @@
+suites:
+  - id: "acme_groundedness_suite"
+    description: "Ensure ACME agent responses are grounded."
+    metrics:
+      - id: "json_validity"
+        type: "deterministic"
+        function: "json_schema"
+        schema_path: "schemas/acme-output.json"
+        threshold: 1.0
+      - id: "groundedness"
+        type: "llm_judge"
+        model: "gpt-4.2"
+        system_prompt: |
+          You are an evaluator judging groundedness of ACME agent answers...
+        rubric:
+          - criterion: "Evidence-based reasoning"
+            scale: "1-5"
+        scoring: "average"
+        threshold: 4.0
+      - id: "latency"
+        type: "telemetry"
+        metric: "p95_latency_ms"
+        max_ms: 2500
+    scoring:
+      combine: "weighted_average"
+      weights:
+        json_validity: 0.3
+        groundedness: 0.5
+        latency: 0.2
+    promotion_threshold: 0.85

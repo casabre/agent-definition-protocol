@@ -1,0 +1,35 @@
+id: "acme.analytics.flow"
+graph:
+  nodes:
+    - id: "input"
+      kind: "input"
+      ui:
+        label: "User Input"
+        icon: "message"
+    - id: "planner"
+      kind: "llm"
+      model_ref: "primary"
+      system_prompt_ref: "prompts.roles.planner"
+      ui:
+        label: "ACME Planner"
+        icon: "brain"
+    - id: "executor"
+      kind: "router"
+      strategy: "sequence"
+    - id: "synthesizer"
+      kind: "llm"
+      model_ref: "primary"
+    - id: "output"
+      kind: "output"
+      ui:
+        label: "Final Answer"
+  edges:
+    - { from: "input", to: "planner" }
+    - { from: "planner", to: "executor" }
+    - { from: "executor", to: "synthesizer" }
+    - { from: "synthesizer", to: "output" }
+  start_nodes: ["input"]
+  end_nodes: ["output"]
+extensions:
+  x_vendor:
+    layout: "linear"

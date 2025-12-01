@@ -1,0 +1,47 @@
+acs_version: "0.1"
+base_image: "python:3.12-slim"
+
+build:
+  working_dir: "/app"
+  copy:
+    - src: "./src"
+      dest: "/app/src"
+    - src: "./adp/agent.yaml"
+      dest: "/app/agent.yaml"
+    - src: "./eval"
+      dest: "/app/eval"
+  dependencies:
+    python:
+      - "langgraph==0.1.0"
+      - "openai==1.40.0"
+    system:
+      - "curl"
+
+runtime:
+  command: ["python", "-m", "acme_agents.main"]
+  args:
+    - "--config"
+    - "/app/agent.yaml"
+  env:
+    - "PYTHONUNBUFFERED=1"
+  ports:
+    - 8080
+  healthcheck:
+    path: "/health"
+    interval_seconds: 30
+    timeout_seconds: 3
+
+telemetry_bindings:
+  otel:
+    enabled: true
+    endpoint_env: "OTEL_EXPORTER_ENDPOINT"
+    service_name: "acme-analytics"
+
+eval_bindings:
+  on_startup:
+    run_suites:
+      - "regression_basic"
+  on_deploy:
+    require_passing_suites:
+      - "regression_basic"
+      - "groundedness_q1"

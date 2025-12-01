@@ -1,0 +1,45 @@
+execution:
+  - backend: "docker"
+    id: "acme-planner-container"
+    image: "acme/agent-planner:1.0.0"
+    entrypoint: ["python", "-m", "planner"]
+    ports: ["8080:8080"]
+    env:
+      ACME_LOG_LEVEL: "info"
+  - backend: "wasm"
+    id: "acme-embedder-wasm"
+    module: "embedder.wasm"
+    exported_functions: ["embed_text"]
+    wasi: true
+    memory:
+      max_mb: 256
+  - backend: "python"
+    id: "acme-agent-python"
+    source:
+      mode: "repo"
+      repo: "https://github.com/acme/agent-suite"
+      path: "agents/analytics/"
+      ref: "v1.1.0"
+    entrypoint: "analytics_agent.main:run"
+    environment:
+      python_version: "3.11"
+    dependencies:
+      - "langgraph==0.2.1"
+  - backend: "typescript"
+    id: "acme-tools-ts"
+    source:
+      mode: "repo"
+      repo: "https://github.com/acme/agent-tools-ts"
+      path: "src/"
+      ref: "tags/v0.3.4"
+    package_manager: "npm"
+    build_cmd: "npm run build"
+    entrypoint: "dist/index.js"
+  - backend: "binary"
+    id: "acme-metrics-binary"
+    path: "bin/acme-metrics"
+    args: ["--mode", "fast"]
+  - backend: "custom"
+    id: "acme-external-endpoint"
+    type: "external-http"
+    endpoint: "https://api.acme.ai/external-agent/run"

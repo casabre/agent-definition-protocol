@@ -1,0 +1,98 @@
+adp_version: "0.1.0"
+id: "agent.acme.analytics"
+name: "Acme Analytics Agent"
+description: "Answers analytic questions over Acme telemetry and metrics."
+owner: "acme-labs"
+tags: ["analytics", "demo", "telemetry"]
+runtime:
+  execution:
+    - backend: "python"
+      id: "acme-python-agent"
+      entrypoint: "acme_agents.main:app"
+      env:
+        ACME_ENV: "dev"
+flow:
+  id: "acme.analytics.flow"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+      - id: "output"
+        kind: "output"
+    edges:
+      - from: "input"
+        to: "output"
+    start_nodes: ["input"]
+    end_nodes: ["output"]
+skills:
+  - id: "answer"
+    name: "Answer telemetry questions"
+    description: "Provide concise answers using indexed telemetry metrics."
+    tags: ["qa", "metrics"]
+    examples:
+      - "What is the p95 latency for service api?"
+    input_modes: ["text"]
+    output_modes: ["text"]
+interop:
+  a2a:
+    ref: "./docs/agentcard.json"
+tools:
+  mcp_servers:
+    - id: "metrics-mcp"
+      description: "Access metrics over MCP"
+      transport: "stdio"
+      endpoint: "bin/metrics-mcp"
+  http_apis:
+    - id: "metrics-api"
+      description: "REST API for metrics"
+      base_url: "https://api.acme.example"
+      auth: "Bearer token via env METRICS_TOKEN"
+  sql_functions:
+    - id: "analytics.fn_latency"
+      description: "Returns latency percentiles"
+      connection: "postgresql://telemetry:***@db.acme.local:5432/metrics"
+      schema: "analytics"
+memory:
+  provider: "pinecone"
+  endpoint: "https://acme-pinecone.example"
+  index: "telemetry"
+  namespace: "default"
+evaluation:
+  suites:
+    - id: "regression_basic"
+      description: "Basic regression checks"
+      metrics:
+        - id: "deterministic-basic"
+          type: "deterministic"
+          function: "acme_evals.regression_basic"
+          rubric: "Return stable answers"
+          scoring: "boolean"
+          threshold: true
+    - id: "groundedness_q1"
+      description: "Groundedness"
+      metrics:
+        - id: "llm-judge"
+          type: "llm_judge"
+          model: "gpt-4o"
+          rubric: "Grounded with citations"
+          scoring: "average"
+          threshold: 0.8
+kpis:
+  - id: "accuracy-core"
+    name: "Core accuracy"
+    description: "Accuracy across core regression suite"
+    url: "https://dash.acme.example/kpi/accuracy-core"
+    target: 0.9
+    unit: "ratio"
+governance:
+  identity: "spn:acme-agents/analytics"
+  allowed_data_scopes: ["metrics.telemetry", "logs.sanitized"]
+  forbidden_data_scopes: ["pii.raw"]
+  telemetry_endpoint: "https://otel.acme.example/v1"
+  guardrail_policy_set: "./policies/guardrails.json"
+deployment:
+  environments:
+    - name: "dev"
+      endpoint: "https://dev.agents.acme.example/analytics"
+    - name: "prod"
+      endpoint: "https://agents.acme.example/analytics"

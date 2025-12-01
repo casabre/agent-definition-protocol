@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/evaluation.schema.json",
+  "title": "ADP Evaluation v0.1.0",
+  "type": "object",
+  "required": ["suites"],
+  "properties": {
+    "suites": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/definitions/suite"}
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "suite": {
+      "type": "object",
+      "required": ["id", "metrics"],
+      "properties": {
+        "id": {"type": "string"},
+        "description": {"type": "string"},
+        "metrics": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/definitions/evaluator"}
+        },
+        "scoring": {
+          "type": "object",
+          "properties": {
+            "combine": {"type": "string", "enum": ["average", "weighted_average", "sum", "boolean"]},
+            "weights": {"type": "object", "additionalProperties": {"type": "number"}}
+          },
+          "additionalProperties": false
+        },
+        "promotion_threshold": {"type": "number", "minimum": 0, "maximum": 1}
+      },
+      "additionalProperties": false
+    },
+    "evaluator": {
+      "type": "object",
+      "required": ["id", "type"],
+      "properties": {
+        "id": {"type": "string"},
+        "type": {"type": "string", "enum": ["deterministic", "llm_judge", "telemetry"]},
+        "description": {"type": "string"},
+        "function": {"type": "string"},
+        "schema_path": {"type": "string"},
+        "model": {"type": "string"},
+        "system_prompt": {"type": "string"},
+        "rubric": {
+          "oneOf": [
+            {"type": "string"},
+            {
+              "type": "array",
+              "items": {
+                "oneOf": [
+                  {"type": "string"},
+                  {
+                    "type": "object",
+                    "properties": {
+                      "criterion": {"type": "string"},
+                      "scale": {"type": "string"},
+                      "weight": {"type": "number"}
+                    },
+                    "required": ["criterion"],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "scoring": {"type": "string", "enum": ["average", "weighted_average", "sum", "boolean"]},
+        "threshold": {"type": ["number", "boolean"]},
+        "telemetry": {
+          "type": "object",
+          "properties": {
+            "metric": {"type": "string"}
+          },
+          "additionalProperties": false
+        },
+        "metric": {"type": "string"},
+        "max_ms": {"type": "number"},
+        "execution": {
+          "type": "object",
+          "properties": {
+            "on": {
+              "type": "array",
+              "items": {"type": "string"}
+            }
+          },
+          "additionalProperties": false
+        },
+        "aggregation": {"type": "string"}
+      },
+      "additionalProperties": false
+    }
+  }
+}
