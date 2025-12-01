@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc -p .",
-    "test": "c8 --reporter=text --reporter=lcov ts-node --esm test/run.ts"
+    "test": "c8 --reporter=text --reporter=lcov ts-node-esm test/run.ts"
   },
   "dependencies": {
     "adm-zip": "^0.5.12",
