@@ -157,4 +157,5 @@ jobs:
             coverage-artifacts/coverage-ts/lcov.info
             coverage-artifacts/coverage-go/coverage.out
             coverage-artifacts/coverage-rust/coverage.lcov
+          token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
