@@ -1,29 +1,16 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.com/schemas/adp.schema.json",
-  "title": "Agent Definition Protocol v0.2.0",
+  "title": "Agent Definition Protocol v0.1.0",
   "type": "object",
   "required": ["adp_version", "id", "runtime", "flow", "evaluation"],
   "properties": {
-    "adp_version": {"type": "string", "const": "0.2.0"},
-    "id": {"type": "string"},
+    "adp_version": {"type": "string", "const": "0.1.0"},
+    "id": {"type": "string", "minLength": 1},
     "name": {"type": "string"},
     "description": {"type": "string"},
     "owner": {"type": "string"},
     "tags": {"type": "array", "items": {"type": "string"}},
-    "extends": {
-      "type": "object",
-      "properties": {"adp": {"type": "string"}},
-      "additionalProperties": false
-    },
-    "import": {
-      "type": "object",
-      "additionalProperties": {"type": "string"}
-    },
-    "overrides": {
-      "type": "object",
-      "additionalProperties": {"type": ["string", "number", "boolean"]}
-    },
     "runtime": {"$ref": "runtime.schema.json"},
     "flow": {"$ref": "flow.schema.json"},
     "prompts": {
@@ -38,9 +25,9 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "name", "description"],
-        "properties": {
-          "id": {"type": "string"},
+          "required": ["id", "name", "description"],
+          "properties": {
+          "id": {"type": "string", "minLength": 1},
           "name": {"type": "string"},
           "description": {"type": "string"},
           "input_modes": {"type": "array", "items": {"type": "string"}},
@@ -50,6 +37,20 @@
         },
         "additionalProperties": true
       }
+    },
+    "interop": {
+      "type": "object",
+      "properties": {
+        "a2a": {
+          "type": "object",
+          "properties": {
+            "ref": {"type": "string"},
+            "agentcard": {"type": "object"}
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
     },
     "tools": {
       "type": "object",
@@ -124,10 +125,10 @@
         "type": "object",
         "required": ["id", "name", "description", "url"],
         "properties": {
-          "id": {"type": "string"},
+          "id": {"type": "string", "minLength": 1},
           "name": {"type": "string"},
           "description": {"type": "string"},
-          "url": {"type": "string"},
+          "url": {"type": "string", "format": "uri"},
           "target": {"type": ["string", "number"]},
           "unit": {"type": "string"}
         },
@@ -140,7 +141,7 @@
         "identity": {"type": "string"},
         "allowed_data_scopes": {"type": "array", "items": {"type": "string"}},
         "forbidden_data_scopes": {"type": "array", "items": {"type": "string"}},
-        "telemetry_endpoint": {"type": "string"},
+        "telemetry_endpoint": {"type": "string", "format": "uri"},
         "guardrail_policy_set": {"type": "string"}
       },
       "additionalProperties": false
@@ -154,8 +155,8 @@
             "type": "object",
             "required": ["name", "endpoint"],
             "properties": {
-              "name": {"type": "string"},
-              "endpoint": {"type": "string"}
+              "name": {"type": "string", "minLength": 1},
+              "endpoint": {"type": "string", "format": "uri"}
             },
             "additionalProperties": false
           }

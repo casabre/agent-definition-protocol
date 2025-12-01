@@ -9,7 +9,8 @@ from jsonschema import Draft202012Validator, RefResolver
 
 from .adp_model import ADP
 
-SCHEMA_DIR = Path(__file__).resolve().parents[2] / "schemas"
+# repo_root/sdk/python/adp_sdk -> parents[3] == repo root
+SCHEMA_DIR = Path(__file__).resolve().parents[3] / "schemas"
 
 
 def _load_schema(name: str) -> dict:

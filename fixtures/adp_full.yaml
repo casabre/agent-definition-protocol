@@ -1,0 +1,27 @@
+adp_version: "0.1.0"
+id: "fixture.acme.full"
+runtime:
+  execution:
+    - backend: "python"
+      id: "py"
+      entrypoint: "agent.main:app"
+flow:
+  id: "fixture.flow"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+      - id: "output"
+        kind: "output"
+    edges: []
+    start_nodes: ["input"]
+    end_nodes: ["output"]
+evaluation:
+  suites:
+    - id: "suite1"
+      metrics:
+        - id: "m1"
+          type: "deterministic"
+          function: "noop"
+          scoring: "boolean"
+          threshold: true

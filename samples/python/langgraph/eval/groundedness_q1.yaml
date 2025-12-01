@@ -1,0 +1,4 @@
+tasks:
+  - id: groundedness_sample
+    prompt: "Cite the telemetry source for latency."
+    expected_policy: "must include source reference"

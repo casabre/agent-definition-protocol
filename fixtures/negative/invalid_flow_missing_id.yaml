@@ -1,0 +1,7 @@
+graph:
+  nodes:
+    - id: "only"
+      kind: "input"
+  edges: []
+  start_nodes: ["only"]
+  end_nodes: ["only"]

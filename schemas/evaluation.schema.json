@@ -1,24 +1,17 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.com/schemas/evaluation.schema.json",
-  "title": "ADP Evaluation v0.2.0",
+  "title": "ADP Evaluation v0.1.0",
   "type": "object",
   "required": ["suites"],
-  "oneOf": [
-    { "type": "object", "maxProperties": 0 },
-    {
-      "type": "object",
-      "properties": {
-        "suites": {
-          "type": "array",
-          "minItems": 1,
-          "items": {"$ref": "#/definitions/suite"}
-        }
-      },
-      "required": ["suites"],
-      "additionalProperties": false
+  "properties": {
+    "suites": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/definitions/suite"}
     }
-  ],
+  },
+  "additionalProperties": false,
   "definitions": {
     "suite": {
       "type": "object",
@@ -34,12 +27,12 @@
         "scoring": {
           "type": "object",
           "properties": {
-            "combine": {"type": "string"},
+            "combine": {"type": "string", "enum": ["average", "weighted_average", "sum", "boolean"]},
             "weights": {"type": "object", "additionalProperties": {"type": "number"}}
           },
           "additionalProperties": false
         },
-        "promotion_threshold": {"type": ["number", "string"]}
+        "promotion_threshold": {"type": "number", "minimum": 0, "maximum": 1}
       },
       "additionalProperties": false
     },
@@ -54,9 +47,31 @@
         "schema_path": {"type": "string"},
         "model": {"type": "string"},
         "system_prompt": {"type": "string"},
-        "rubric": {"type": ["string", "array"], "items": {"type": "string"}},
-        "scoring": {"type": "string"},
-        "threshold": {"type": ["number", "string"]},
+        "rubric": {
+          "oneOf": [
+            {"type": "string"},
+            {
+              "type": "array",
+              "items": {
+                "oneOf": [
+                  {"type": "string"},
+                  {
+                    "type": "object",
+                    "properties": {
+                      "criterion": {"type": "string"},
+                      "scale": {"type": "string"},
+                      "weight": {"type": "number"}
+                    },
+                    "required": ["criterion"],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "scoring": {"type": "string", "enum": ["average", "weighted_average", "sum", "boolean"]},
+        "threshold": {"type": ["number", "boolean"]},
         "telemetry": {
           "type": "object",
           "properties": {

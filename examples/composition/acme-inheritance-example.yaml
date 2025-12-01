@@ -1,9 +1,0 @@
-adp_version: "0.2.0"
-extends:
-  adp: "acme.base-agent@v1.0.0"
-import:
-  flow: "acme.modules.flows.analytics@v2.0.0"
-  evaluation: "acme.modules.evals.groundedness@v1.4.0"
-overrides:
-  guardrails.behavior.max_steps: 48
-id: "acme.analytics.planner"

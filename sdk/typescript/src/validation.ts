@@ -2,8 +2,10 @@ import fs from "fs";
 import path from "path";
 import Ajv from "ajv";
 import yaml from "js-yaml";
+import { fileURLToPath } from "url";
 
-const ajv = new Ajv({ allErrors: true, strict: false });
+const ajv = new Ajv({ allErrors: true, strict: false, validateSchema: false });
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 function loadSchema(name: string) {
   const base = path.resolve(__dirname, "../../../schemas", name);

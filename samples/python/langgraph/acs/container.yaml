@@ -1,0 +1,24 @@
+acs_version: "0.1.0"
+base_image: "python:3.12-slim"
+
+build:
+  working_dir: "/app"
+  copy:
+    - src: "./src"
+      dest: "/app/src"
+    - src: "./adp/agent.yaml"
+      dest: "/app/adp/agent.yaml"
+  dependencies:
+    python:
+      - "langgraph==0.2.1"
+      - "pyyaml>=6.0"
+
+runtime:
+  command: ["python", "-m", "acme.data_analysist.agent"]
+  env:
+    - "PYTHONUNBUFFERED=1"
+  ports: []
+  healthcheck:
+    path: "/health"
+    interval_seconds: 30
+    timeout_seconds: 3

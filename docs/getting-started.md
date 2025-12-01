@@ -2,36 +2,21 @@
 
 1. Read the normative specs in `spec/`.
 2. Explore the examples under `examples/` (runtime, flow, evaluation, full ADP).
-3. Install the CLI from `cli/`:
-
-   ```bash
-   python -m pip install -e cli
-   adp --help
-   ```
-
-4. Validate an agent and container spec:
-
-   ```bash
-   adp validate --adp examples/adp/acme-full-agent.yaml
-   ```
-
-5. Pack and unpack a package:
+3. Validate with schemas:
 
    ```bash
    ./scripts/validate.sh
    ```
 
-6. Run tests inside a virtual environment:
+4. Use SDKs (Python/TS/Rust/Go) for programmatic validation/OCI packaging (see README).
+
+5. Run tests inside a virtual environment:
 
    ```bash
    python -m venv .venv
    source .venv/bin/activate
-   python -m pip install -e cli pytest
-   python -m pytest cli/tests
+   python -m pip install -e sdk/python pytest
+   python -m pytest sdk/python/tests
    ```
 
-For detailed field descriptions, see:
-
-- ADP: `specification/core/adp-v0.1.md`
-- ACS: `specification/core/acs-v0.1.md`
-- ADPKG: `specification/core/adpkg-v0.1.md`
+For detailed field descriptions, see `spec/` and `schemas/`. Composition is a future feature (see `roadmap.md`).

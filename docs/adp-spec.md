@@ -12,8 +12,4 @@ Key concepts:
 - Evaluation: suites, KPIs (with URLs/targets), and promotion policy.
 - Governance and deployment: data scopes, telemetry, environments.
 
-Validate an ADP file:
-
-```bash
-adp validate --adp examples/acme-analytics/adp/agent.yaml
-```
+Validate an ADP file with the provided schema using `scripts/validate.sh` or the SDKs.

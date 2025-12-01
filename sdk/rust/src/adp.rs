@@ -6,6 +6,7 @@ use std::path::Path;
 pub struct RuntimeEntry {
     pub backend: String,
     pub id: String,
+    pub entrypoint: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

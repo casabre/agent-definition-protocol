@@ -1,4 +1,4 @@
-adp_version: "0.2.0"
+adp_version: "0.1.0"
 id: "acme.example.simple-agent"
 runtime:
   execution:
@@ -6,5 +6,21 @@ runtime:
       id: "acme-external-http"
       type: "external-http"
       endpoint: "https://api.acme.ai/simple-agent/run"
-flow: {}
-evaluation: {}
+flow:
+  id: "flow.simple"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+    edges: []
+    start_nodes: ["input"]
+    end_nodes: ["input"]
+evaluation:
+  suites:
+    - id: "smoke"
+      metrics:
+        - id: "ping"
+          type: "deterministic"
+          function: "noop"
+          scoring: "boolean"
+          threshold: true

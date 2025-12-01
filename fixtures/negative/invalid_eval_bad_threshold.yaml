@@ -1,0 +1,8 @@
+suites:
+  - id: "bad"
+    metrics:
+      - id: "m1"
+        type: "deterministic"
+        function: "noop"
+        scoring: "boolean"
+        threshold: "not-boolean"

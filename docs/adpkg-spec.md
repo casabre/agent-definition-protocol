@@ -1,16 +1,14 @@
 # ADPKG Packaging Overview
 
-ADPKG is an OPC/ZIP package for shipping agents, with `.adpkg` as the recommended extension. The normative description is in `specification/core/adpkg-v0.1.md`.
+ADPKG is a package for shipping agents. For ADP v0.1.0, OCI image layout is canonical (see `spec/adpkg-oci.md`). Legacy OPC/ZIP is deprecated.
 
-Layout highlights:
+OCI layout highlights:
+- `oci-layout` and `index.json` following OCI image layout.
+- `blobs/sha256/<digest>` containing manifest, config, and package layer.
+- Package layer tar includes `/adp/agent.yaml` (required), `/acs/container.yaml` (optional), `/eval/`, `/tools/`, `/src/`, `/metadata/`.
+- Config blob captures minimal metadata (agent id, adp_version).
 
-- `/adp/agent.yaml` and `/acs/container.yaml` are required.
-- `/eval`, `/tools`, `/src`, `/docs` may be included.
-- `/metadata/version.json` captures version/build metadata.
-- `[Content_Types].xml` declares MIME types for package parts.
-
-Pack an agent:
-
-```bash
-adp pack --agent examples/acme-analytics/adp/agent.yaml --acs examples/acme-analytics/acs/container.yaml --src examples/acme-analytics/src --eval examples/acme-analytics/eval --out acme-analytics-0.1.0.adpkg
-```
+Media types (proposed):
+- Config: `application/vnd.adp.config.v1+json`
+- Package layer: `application/vnd.adp.package.v1+tar`
+- Manifest: `application/vnd.oci.image.manifest.v1+json`

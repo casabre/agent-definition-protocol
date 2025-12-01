@@ -1,0 +1,44 @@
+adp_version: "0.1.0"
+id: "acme.langgraph.sample"
+name: "Acme LangGraph Sample Agent"
+description: "Minimal LangGraph agent for sample packaging."
+owner: "acme-labs"
+runtime:
+  execution:
+    - backend: "python"
+      id: "langgraph-backend"
+      entrypoint: "acme.data_analysist.agent:main"
+prompts:
+  system: |
+    You are the Acme LangGraph sample agent. Greet users and show your agent id.
+  roles:
+    - "planner"
+    - "responder"
+flow:
+  id: "acme.langgraph.flow"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+      - id: "invoke-graph"
+        kind: "tool"
+        params:
+          tool_id: "langgraph-backend"
+      - id: "output"
+        kind: "output"
+    edges:
+      - from: "input"
+        to: "invoke-graph"
+      - from: "invoke-graph"
+        to: "output"
+    start_nodes: ["input"]
+    end_nodes: ["output"]
+evaluation:
+  suites:
+    - id: "smoke"
+      metrics:
+        - id: "ping"
+          type: "deterministic"
+          function: "noop"
+          scoring: "boolean"
+          threshold: true

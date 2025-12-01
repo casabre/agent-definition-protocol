@@ -1,4 +1,4 @@
-adp_version: "0.2.0"
+adp_version: "0.1.0"
 id: "agent.acme.analytics"
 name: "Acme Analytics Agent"
 description: "Answers analytic questions over Acme telemetry and metrics."
@@ -11,6 +11,19 @@ runtime:
       entrypoint: "acme_agents.main:app"
       env:
         ACME_ENV: "dev"
+flow:
+  id: "acme.analytics.flow"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+      - id: "output"
+        kind: "output"
+    edges:
+      - from: "input"
+        to: "output"
+    start_nodes: ["input"]
+    end_nodes: ["output"]
 skills:
   - id: "answer"
     name: "Answer telemetry questions"
@@ -48,29 +61,29 @@ evaluation:
   suites:
     - id: "regression_basic"
       description: "Basic regression checks"
-      evaluators:
+      metrics:
         - id: "deterministic-basic"
           type: "deterministic"
           function: "acme_evals.regression_basic"
           rubric: "Return stable answers"
           scoring: "boolean"
-          threshold: "true"
+          threshold: true
     - id: "groundedness_q1"
       description: "Groundedness"
-      evaluators:
+      metrics:
         - id: "llm-judge"
           type: "llm_judge"
           model: "gpt-4o"
           rubric: "Grounded with citations"
-          scoring: "0-1"
+          scoring: "average"
           threshold: 0.8
 kpis:
   - id: "accuracy-core"
     name: "Core accuracy"
     description: "Accuracy across core regression suite"
     url: "https://dash.acme.example/kpi/accuracy-core"
-      target: 0.9
-      unit: "ratio"
+    target: 0.9
+    unit: "ratio"
 governance:
   identity: "spn:acme-agents/analytics"
   allowed_data_scopes: ["metrics.telemetry", "logs.sanitized"]

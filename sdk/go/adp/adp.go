@@ -8,6 +8,7 @@ import (
 type RuntimeEntry struct {
     Backend string `yaml:"backend"`
     ID      string `yaml:"id"`
+    Entrypoint string `yaml:"entrypoint"`
 }
 
 type Runtime struct {

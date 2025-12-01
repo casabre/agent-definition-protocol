@@ -8,8 +8,4 @@ Highlights:
 - Runtime command, args, environment, ports, and healthcheck.
 - Telemetry bindings (e.g., OTEL) and evaluation bindings.
 
-Validate an ACS file:
-
-```bash
-adp validate --acs examples/acme-analytics/acs/container.yaml
-```
+Validate an ACS file with `schemas/acs.schema.json` (legacy) via `scripts/validate.sh`.

@@ -1,9 +1,9 @@
-adp_version: "0.2.0"
+adp_version: "0.1.0"
 id: "acme.analytics.agent"
 name: "Acme Analytics Agent"
 description: "Multi-backend agent answering analytics questions with strong governance."
 owner: "acme-labs"
-tags: ["analytics", "acme", "v0.2.0"]
+tags: ["analytics", "acme", "v0.1.0"]
 
 runtime:
   execution:
