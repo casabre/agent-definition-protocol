@@ -9,7 +9,7 @@ function buildSource(tmp: string) {
   fs.mkdirSync(adpDir, { recursive: true });
   fs.writeFileSync(
     path.join(adpDir, "agent.yaml"),
-    `adp_version: "0.1.0"\nid: "agent.test"\nruntime:\n  execution:\n    - backend: "python"\n      id: "py"\n      entrypoint: "agent.main:app"\nflow: { id: "flow.test", graph: { nodes: [{ id: "n1", kind: "input" }], edges: [], start_nodes: ["n1"], end_nodes: ["n1"] } }\nevaluation:\n  suites:\n    - id: basic\n      metrics:\n        - id: m1\n          type: deterministic\n          function: noop\n          scoring: boolean\n          threshold: "true"\n`
+    `adp_version: "0.1.0"\nid: "agent.test"\nruntime:\n  execution:\n    - backend: "python"\n      id: "py"\n      entrypoint: "agent.main:app"\nflow: { id: "flow.test", graph: { nodes: [{ id: "n1", kind: "input" }], edges: [], start_nodes: ["n1"], end_nodes: ["n1"] } }\nevaluation:\n  suites:\n    - id: basic\n      metrics:\n        - id: m1\n          type: deterministic\n          function: noop\n          scoring: boolean\n          threshold: true\n`
   );
 }
 
@@ -24,7 +24,7 @@ function testValidate() {
         {
           id: "s",
           metrics: [
-            { id: "m1", type: "deterministic", function: "noop", scoring: "boolean", threshold: "true" },
+            { id: "m1", type: "deterministic", function: "noop", scoring: "boolean", threshold: true },
           ],
         },
       ],
