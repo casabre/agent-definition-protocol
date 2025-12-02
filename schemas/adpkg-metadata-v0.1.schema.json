@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.com/schemas/adpkg-metadata-v0.1.schema.json",
+  "$id": "https://adp.dev/schemas/adpkg-metadata-v0.1.schema.json",
   "title": "ADPKG metadata v0.1",
   "type": "object",
   "required": ["agent_id", "agent_version", "spec_version", "build_timestamp"],

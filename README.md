@@ -18,6 +18,39 @@ Why care? ADP v0.1.0 keeps the critical context glued to the agent: multi-backen
 - **LangGraph sample**: See `samples/python/langgraph/` for a minimal LangGraph agent packaged with ADP v0.1.0.
 - **Governance/Provenance (roadmap)**: See `spec/governance-provenance.md` for signing/SBOM/provenance plans.
 
+## Relationship to Other Protocols
+
+ADP is designed to complement and integrate with existing standards:
+
+### MCP (Model Context Protocol)
+- **Integration**: ADP agents can declare MCP servers as tools (`tools.mcp_servers[]`)
+- **Purpose**: MCP provides the transport layer for tool communication; ADP describes which MCP servers an agent uses
+- **Relationship**: ADP is complementary—MCP handles runtime tool execution, ADP handles agent definition and packaging
+
+### OCI (Open Container Initiative)
+- **Integration**: ADP packages (ADPKG) use OCI image layout for distribution
+- **Purpose**: OCI provides the packaging format; ADP defines the manifest structure within OCI artifacts
+- **Relationship**: ADP leverages OCI for container registries, signing (Notary v2), and artifact distribution
+
+### OpenAPI
+- **Integration**: ADP agents can declare HTTP APIs as tools (`tools.http_apis[]`)
+- **Purpose**: OpenAPI describes API contracts; ADP describes which APIs an agent consumes
+- **Relationship**: ADP can reference OpenAPI specs for tool documentation, but doesn't replace OpenAPI
+
+### A2A (Agent-to-Agent)
+- **Integration**: ADP includes `interop.a2a` block for AgentCard compatibility
+- **Purpose**: A2A defines agent-to-agent communication; ADP provides a packaging and deployment format
+- **Relationship**: ADP can embed or reference A2A AgentCards for interoperability. See `spec/integrations/a2a-mapping.md` for detailed mapping
+
+### OpenTelemetry
+- **Integration**: ADP agents declare telemetry endpoints and metrics (`governance.telemetry_endpoint`, `evaluation.metrics[]`)
+- **Purpose**: OpenTelemetry provides observability standards; ADP declares what telemetry an agent emits
+- **Relationship**: ADP references OTel semantic conventions for metrics. See `spec/interop-mapping.md` for details
+
+**Key Point**: ADP doesn't replace these protocols—it orchestrates them. ADP provides the "glue" that describes how agents use MCP tools, OCI packaging, HTTP APIs, and telemetry systems together.
+
+See `spec/interop-mapping.md` for detailed interoperability mappings.
+
 ## Minimal ADP example (v0.1.0)
 
 ```yaml
@@ -52,7 +85,9 @@ evaluation: {}
 - Rust/Go: see `sdk/rust/src/lib.rs` and `sdk/go/adp` for load/validate/create/open helpers.
 
 ## Where to look
-- Specs: `spec/` (runtime, flow, evaluation, minimal, adpkg-oci, governance-provenance)
+- **Main spec**: `spec/adp-v0.1.0.md` (canonical entry point)
+- **Component specs**: `spec/` (runtime, flow, evaluation, minimal, adpkg-oci, governance-provenance)
+- **Spec overview**: `spec/README.md` (navigation guide)
 - Schemas: `schemas/`
 - Examples: `examples/` (minimal, runtime, flow, evaluation, full ADP)
 - Samples: `samples/python/langgraph/` (LangGraph OCI packaging)
@@ -73,7 +108,9 @@ evaluation: {}
 
 ## Getting started
 
-- Read the specs in `spec/` and walkthroughs in `docs/`.
+- Read the main specification: `spec/adp-v0.1.0.md`
+- Browse component specs: `spec/README.md` (navigation guide)
+- See walkthroughs: `docs/`
 - Try the ACME examples under `examples/` (minimal, runtime, flow, evaluation, full ADP).
 - Validate with `./scripts/validate.sh` (jsonschema) or the SDKs.
 - SDKs live under `sdk/` (Python, TypeScript, Rust, Go) for programmatic ADP/ADPKG handling.

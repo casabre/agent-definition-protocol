@@ -1,4 +1,10 @@
-# ADP Composition (Future Feature)
+# ADP Roadmap
+
+This document outlines planned features for future ADP releases.
+
+## v0.2.0 (Planned)
+
+### Composition
 
 Composition (extends/import/overrides) is planned for a future ADP release. Do not rely on these fields for interoperability until a finalized spec and schema are published.
 
@@ -29,3 +35,22 @@ Conflicts resolve by last writer; invalid paths SHOULD fail validation.
 
 ## Status
 - Placeholder only; no schema or tooling support is provided yet.
+
+### Enhanced Governance
+
+Formal governance features are planned for v0.2.0:
+
+- **Guardrails Schema**: Formalize policy references and enforcement modes
+- **Data Scopes**: Formalize data domain taxonomy and access logging
+- **Telemetry Requirements**: Define required OTel resource attributes
+- **Security Models**: Tool authentication schemes and secret handling
+- **Privacy**: PII handling posture and compliance requirements
+
+See `spec/governance-provenance.md` for current status and roadmap details.
+
+## v1.0.0 (Future)
+
+- Stable API with backward compatibility guarantees
+- Complete governance and provenance specifications
+- Standardization body submission
+- Production-ready tooling and ecosystem
