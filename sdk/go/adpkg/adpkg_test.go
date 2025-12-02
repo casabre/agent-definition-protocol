@@ -348,7 +348,6 @@ func TestCreateTarErrorPaths(t *testing.T) {
 	if err := os.WriteFile(noReadFile, []byte("test"), 0o000); err != nil {
 		t.Fatal(err)
 	}
-	defer os.Chmod(noReadFile, 0o644) // Restore for cleanup
 	
 	dest2 := filepath.Join(tmp, "test2.tar")
 	// This should fail when trying to read the file (covers line 144-146)
@@ -358,6 +357,10 @@ func TestCreateTarErrorPaths(t *testing.T) {
 		t.Logf("createTar failed as expected: %v", err)
 	}
 	
+	// Remove the unreadable file immediately to avoid interfering with subsequent tests
+	os.Chmod(noReadFile, 0o644) // Restore permissions first
+	os.Remove(noReadFile)       // Then remove it
+	
 	// Test filepath.Rel error path (line 140-142) - very hard to trigger
 	// Test tar.FileInfoHeader error (line 148-150) - hard to trigger
 	// Test tw.WriteHeader error (line 154-156) - hard to trigger
@@ -366,6 +369,7 @@ func TestCreateTarErrorPaths(t *testing.T) {
 	// For now, we test the normal path which covers most cases
 	
 	// Test normal path to ensure all code paths are exercised
+	// Rebuild source in a clean state
 	if err := buildSource(tmp); err != nil {
 		t.Fatal(err)
 	}
