@@ -133,11 +133,121 @@ test("package handles missing adp directory", () => {
   const tmp = fs.mkdtempSync(path.join(process.cwd(), "ts-oci-"));
   try {
     const outDir = path.join(tmp, "oci");
+    // This covers the error branch at line 27: fs.readFileSync throws when file doesn't exist
     assert.throws(
       () => createPackage(tmp, outDir),
-      /agent\.yaml/,
+      (err: any) => {
+        // Error could be ENOENT or mention agent.yaml
+        return err.code === "ENOENT" || err.message.includes("agent.yaml") || err.message.includes("no such file");
+      },
       "should throw error for missing agent.yaml"
     );
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test("createPackage throws error on validation failure", () => {
+  const tmp = fs.mkdtempSync(path.join(process.cwd(), "ts-oci-"));
+  try {
+    const adpDir = path.join(tmp, "adp");
+    fs.mkdirSync(adpDir, { recursive: true });
+    // Write invalid ADP (missing required fields)
+    fs.writeFileSync(
+      path.join(adpDir, "agent.yaml"),
+      "adp_version: \"0.1.0\"\nid: \"\"\n"
+    );
+    const outDir = path.join(tmp, "oci");
+    assert.throws(
+      () => createPackage(tmp, outDir),
+      /validation failed/i,
+      "should throw error on validation failure"
+    );
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test("openPackage handles missing agent.yaml in layer", () => {
+  const tmp = fs.mkdtempSync(path.join(process.cwd(), "ts-oci-"));
+  try {
+    buildSource(tmp);
+    const outDir = path.join(tmp, "oci");
+    createPackage(tmp, outDir);
+    
+    // Corrupt the layer by removing adp/agent.yaml
+    const index = JSON.parse(fs.readFileSync(path.join(outDir, "index.json"), "utf8"));
+    const manifestDigest = index.manifests[0].digest.replace("sha256:", "");
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(outDir, "blobs", "sha256", manifestDigest), "utf8")
+    );
+    const layerDigest = manifest.layers[0].digest.replace("sha256:", "");
+    const layerPath = path.join(outDir, "blobs", "sha256", layerDigest);
+    
+    // Create empty tar (no adp/agent.yaml)
+    const tar = require("tar");
+    const emptyDir = path.join(tmp, "empty");
+    fs.mkdirSync(emptyDir, { recursive: true });
+    tar.c({ file: layerPath, cwd: emptyDir, sync: true }, []);
+    
+    assert.throws(
+      () => openPackage(outDir),
+      /agent\.yaml/i,
+      "should throw error when agent.yaml is missing"
+    );
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test("openPackage with v0.2.0 manifest", () => {
+  const tmp = fs.mkdtempSync(path.join(process.cwd(), "ts-oci-"));
+  try {
+    const adpDir = path.join(tmp, "adp");
+    fs.mkdirSync(adpDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(adpDir, "agent.yaml"),
+      `adp_version: "0.2.0"
+id: "agent.v0.2.0"
+runtime:
+  execution:
+    - backend: "python"
+      id: "py"
+      entrypoint: "agent.main:app"
+  models:
+    - id: "primary"
+      provider: "openai"
+      model: "gpt-4"
+      api_key_env: "OPENAI_API_KEY"
+flow:
+  id: "test.flow"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+      - id: "llm"
+        kind: "llm"
+        model_ref: "primary"
+      - id: "tool"
+        kind: "tool"
+        tool_ref: "api"
+      - id: "output"
+        kind: "output"
+    edges: []
+    start_nodes: ["input"]
+    end_nodes: ["output"]
+evaluation: {}
+`
+    );
+    const outDir = path.join(tmp, "oci");
+    createPackage(tmp, outDir);
+    
+    const adp = openPackage(outDir) as any;
+    assert.strictEqual(adp.id, "agent.v0.2.0");
+    assert.strictEqual(adp.adp_version, "0.2.0");
+    assert.ok(adp.runtime.models, "should have models array");
+    assert.strictEqual(adp.runtime.models.length, 1);
+    assert.strictEqual(adp.runtime.models[0].id, "primary");
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

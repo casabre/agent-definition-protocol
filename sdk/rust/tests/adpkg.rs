@@ -141,3 +141,135 @@ fn test_package_with_metadata() {
     assert!(names.iter().any(|p| p == std::path::Path::new("adp/agent.yaml")), 
             "Layer must contain adp/agent.yaml");
 }
+
+#[test]
+fn test_blob_path() {
+    use adp_sdk::adpkg::blob_path;
+    let root = std::path::Path::new("/test");
+    let digest = "sha256:abc123def456";
+    let path = blob_path(root, digest);
+    assert!(path.to_string_lossy().contains("blobs"));
+    assert!(path.to_string_lossy().contains("sha256"));
+    assert!(path.to_string_lossy().contains("abc123def456"));
+}
+
+#[test]
+fn test_create_adpkg_error_paths() {
+    let tmp = tempdir().unwrap();
+    
+    // Test missing adp/agent.yaml - load_adp will fail
+    let oci_dir = tmp.path().join("oci");
+    let result = create_adpkg(tmp.path().to_str().unwrap(), oci_dir.to_str().unwrap());
+    assert!(result.is_err(), "should fail when adp/agent.yaml is missing");
+    let err_msg = result.unwrap_err().to_string();
+    // Error could be from file not found or yaml parse error
+    assert!(err_msg.contains("agent.yaml") || err_msg.contains("No such file") || err_msg.contains("not found"), 
+            "error should mention agent.yaml or file not found");
+    
+    // Test invalid ADP (validation failure)
+    let adp_dir = tmp.path().join("adp");
+    fs::create_dir_all(&adp_dir).unwrap();
+    fs::write(
+        adp_dir.join("agent.yaml"),
+        r#"adp_version: "0.1.0"
+id: "invalid"
+runtime:
+  execution: []
+flow: {}
+evaluation: {}
+"#,
+    ).unwrap();
+    
+    let oci_dir2 = tmp.path().join("oci2");
+    let result2 = create_adpkg(tmp.path().to_str().unwrap(), oci_dir2.to_str().unwrap());
+    assert!(result2.is_err(), "should fail validation for empty execution");
+    let err_msg2 = result2.unwrap_err().to_string();
+    assert!(err_msg2.contains("execution") || err_msg2.contains("runtime") || err_msg2.contains("empty") || err_msg2.contains("must not be empty"), 
+            "error should mention execution or runtime");
+}
+
+#[test]
+fn test_open_adpkg_error_paths() {
+    let tmp = tempdir().unwrap();
+    
+    // Test missing index.json
+    let result = open_adpkg(tmp.path().to_str().unwrap());
+    assert!(result.is_err(), "should fail when index.json is missing");
+    
+    // Test missing agent.yaml in layer
+    build_source(tmp.path());
+    let oci_dir = tmp.path().join("oci");
+    create_adpkg(tmp.path().to_str().unwrap(), oci_dir.to_str().unwrap()).unwrap();
+    
+    // Corrupt the layer by creating empty tar
+    use serde_json;
+    let index: serde_json::Value = serde_json::from_slice(&fs::read(oci_dir.join("index.json")).unwrap()).unwrap();
+    let manifest_digest = index["manifests"][0]["digest"].as_str().unwrap();
+    let manifest: serde_json::Value = serde_json::from_slice(
+        &fs::read(adp_sdk::adpkg::blob_path(&oci_dir, manifest_digest)).unwrap()
+    ).unwrap();
+    let layer_digest = manifest["layers"][0]["digest"].as_str().unwrap();
+    let layer_path = adp_sdk::adpkg::blob_path(&oci_dir, layer_digest);
+    
+    // Create empty tar (no adp/agent.yaml)
+    let empty_tar = tmp.path().join("empty.tar");
+    let mut builder = tar::Builder::new(fs::File::create(&empty_tar).unwrap());
+    builder.finish().unwrap();
+    fs::copy(&empty_tar, &layer_path).unwrap();
+    
+    let result = open_adpkg(oci_dir.to_str().unwrap());
+    assert!(result.is_err(), "should fail when agent.yaml is missing in layer");
+    assert!(result.unwrap_err().to_string().contains("adp/agent.yaml"), 
+            "error should mention adp/agent.yaml");
+}
+
+#[test]
+fn test_create_adpkg_v0_2_0() {
+    let tmp = tempdir().unwrap();
+    let adp_dir = tmp.path().join("adp");
+    fs::create_dir_all(&adp_dir).unwrap();
+    fs::write(
+        adp_dir.join("agent.yaml"),
+        r#"adp_version: "0.2.0"
+id: "agent.v0.2.0"
+runtime:
+  execution:
+    - backend: "python"
+      id: "py"
+      entrypoint: "agent.main:app"
+  models:
+    - id: "primary"
+      provider: "openai"
+      model: "gpt-4"
+      api_key_env: "OPENAI_API_KEY"
+flow:
+  id: "test.flow"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+      - id: "llm"
+        kind: "llm"
+        model_ref: "primary"
+      - id: "tool"
+        kind: "tool"
+        tool_ref: "api"
+      - id: "output"
+        kind: "output"
+    edges: []
+    start_nodes: ["input"]
+    end_nodes: ["output"]
+evaluation: {}
+"#,
+    ).unwrap();
+    
+    let oci_dir = tmp.path().join("oci");
+    create_adpkg(tmp.path().to_str().unwrap(), oci_dir.to_str().unwrap()).unwrap();
+    
+    let adp = open_adpkg(oci_dir.to_str().unwrap()).unwrap();
+    assert_eq!(adp.id, "agent.v0.2.0");
+    assert_eq!(adp.adp_version, "0.2.0");
+    assert!(adp.runtime.models.is_some());
+    assert_eq!(adp.runtime.models.as_ref().unwrap().len(), 1);
+    assert_eq!(adp.runtime.models.as_ref().unwrap()[0].id, "primary");
+}

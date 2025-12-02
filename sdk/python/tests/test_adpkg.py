@@ -10,11 +10,44 @@ from adp_sdk.adpkg import ADPackage  # type: ignore
 from adp_sdk.adp_model import ADP  # type: ignore
 
 
-def build_source(tmp_path: Path) -> Path:
+def build_source(tmp_path: Path, version: str = "0.1.0") -> Path:
     adp_dir = tmp_path / "adp"
     adp_dir.mkdir(parents=True)
-    adp_dir.joinpath("agent.yaml").write_text(
+    if version == "0.2.0":
+        agent_yaml = """
+        adp_version: "0.2.0"
+        id: "agent.test.v0.2.0"
+        runtime:
+          execution:
+            - backend: "python"
+              id: "py"
+              entrypoint: "agent.main:app"
+          models:
+            - id: "primary"
+              provider: "openai"
+              model: "gpt-4"
+              api_key_env: "OPENAI_API_KEY"
+        flow:
+          id: "test.flow"
+          graph:
+            nodes:
+              - id: "input"
+                kind: "input"
+              - id: "llm"
+                kind: "llm"
+                model_ref: "primary"
+              - id: "tool"
+                kind: "tool"
+                tool_ref: "api"
+              - id: "output"
+                kind: "output"
+            edges: []
+            start_nodes: ["input"]
+            end_nodes: ["output"]
+        evaluation: {}
         """
+    else:
+        agent_yaml = """
         adp_version: "0.1.0"
         id: "agent.test"
         runtime:
@@ -25,7 +58,7 @@ def build_source(tmp_path: Path) -> Path:
         flow: {}
         evaluation: {}
         """
-    )
+    adp_dir.joinpath("agent.yaml").write_text(agent_yaml)
     (tmp_path / "acs").mkdir()
     (tmp_path / "acs" / "container.yaml").write_text("base_image: python:3.12\n")
     (tmp_path / "metadata").mkdir()
@@ -48,6 +81,33 @@ def test_create_and_read_oci_package(tmp_path: Path) -> None:
     assert isinstance(adp, ADP)
     assert adp.id == "agent.test"
     assert pkg.list_blobs(), "blobs should not be empty"
+
+
+def test_create_and_read_oci_package_v0_2_0(tmp_path: Path) -> None:
+    """Test ADPKG round-trip with v0.2.0 manifest."""
+    src = build_source(tmp_path, version="0.2.0")
+    pkg_dir = tmp_path / "oci"
+    pkg = ADPackage.create_from_directory(src, pkg_dir)
+
+    # Read back ADP
+    adp = pkg.read_adp()
+    assert isinstance(adp, ADP)
+    assert adp.id == "agent.test.v0.2.0"
+    assert adp.adp_version == "0.2.0"
+
+    # Verify v0.2.0 features are preserved
+    flow_data = adp.flow if isinstance(adp.flow, dict) else adp.flow.model_dump()
+    if isinstance(flow_data, dict) and "graph" in flow_data:
+        nodes = flow_data.get("graph", {}).get("nodes", [])
+        # Check for tool_ref and model_ref
+        has_tool_ref = any(
+            node.get("tool_ref") for node in nodes if isinstance(node, dict)
+        )
+        has_model_ref = any(
+            node.get("model_ref") for node in nodes if isinstance(node, dict)
+        )
+        assert has_tool_ref, "tool_ref should be preserved in ADPKG"
+        assert has_model_ref, "model_ref should be preserved in ADPKG"
 
 
 def test_validation_failure(tmp_path: Path) -> None:
@@ -335,3 +395,139 @@ def test_list_blobs(tmp_path: Path):
         )
         blob_path = pkg_dir / "blobs" / "sha256" / blob_name
         assert blob_path.exists(), f"Blob should exist: {blob_path}"
+
+
+def test_descriptor_with_annotations():
+    """Test Descriptor.to_dict() includes annotations when present."""
+    from adp_sdk.adpkg import Descriptor
+
+    # Descriptor without annotations
+    desc_no_ann = Descriptor(
+        mediaType="application/test", digest="sha256:abc123", size=100
+    )
+    data_no_ann = desc_no_ann.to_dict()
+    assert "annotations" not in data_no_ann, "Should not include annotations when None"
+    assert data_no_ann["mediaType"] == "application/test"
+    assert data_no_ann["digest"] == "sha256:abc123"
+    assert data_no_ann["size"] == 100
+
+    # Descriptor with annotations
+    annotations = {"org.test.key": "value", "version": "1.0"}
+    desc_with_ann = Descriptor(
+        mediaType="application/test",
+        digest="sha256:abc123",
+        size=100,
+        annotations=annotations,
+    )
+    data_with_ann = desc_with_ann.to_dict()
+    assert "annotations" in data_with_ann, "Should include annotations when present"
+    assert data_with_ann["annotations"] == annotations, "Annotations should match"
+    assert data_with_ann["annotations"]["org.test.key"] == "value"
+    assert data_with_ann["annotations"]["version"] == "1.0"
+
+
+def test_create_package_with_file_path_raises_error(tmp_path: Path):
+    """Test that create_from_directory raises ValueError when out_path is a file."""
+    src = build_source(tmp_path)
+    file_path = tmp_path / "package.tar"  # File path with suffix
+
+    with pytest.raises(ValueError) as exc_info:
+        ADPackage.create_from_directory(src, file_path)
+
+    error_msg = str(exc_info.value)
+    assert "directory" in error_msg.lower(), "Error should mention directory"
+    assert "file" in error_msg.lower() or "suffix" in error_msg.lower(), (
+        "Error should mention file or suffix"
+    )
+
+
+def test_read_adp_missing_agent_yaml(tmp_path: Path):
+    """Test that read_adp raises FileNotFoundError when adp/agent.yaml is missing."""
+    src = build_source(tmp_path)
+    pkg_dir = tmp_path / "oci"
+    pkg = ADPackage.create_from_directory(src, pkg_dir)
+
+    # Corrupt the package by removing adp/agent.yaml from the tar
+    import json
+    import tarfile
+
+    # Get the layer path
+    index = json.loads((pkg_dir / "index.json").read_text())
+    manifest_digest = index["manifests"][0]["digest"].split(":")[1]
+    manifest = json.loads((pkg_dir / "blobs" / "sha256" / manifest_digest).read_text())
+    layer_digest = manifest["layers"][0]["digest"].split(":")[1]
+    layer_path = pkg_dir / "blobs" / "sha256" / layer_digest
+
+    # Create a new tar without adp/agent.yaml
+    corrupted_tar = tmp_path / "corrupted.tar"
+    with tarfile.open(layer_path, "r") as original:
+        with tarfile.open(corrupted_tar, "w") as new_tar:
+            for member in original.getmembers():
+                if member.name != "adp/agent.yaml":
+                    file_obj = original.extractfile(member)
+                    if file_obj:
+                        new_tar.addfile(member, file_obj)
+
+    # Replace the layer
+    corrupted_tar.replace(layer_path)
+
+    # Try to read ADP - should fail with FileNotFoundError
+    with pytest.raises(FileNotFoundError) as exc_info:
+        pkg.read_adp()
+
+    error_msg = str(exc_info.value)
+    assert "adp/agent.yaml" in error_msg.lower(), (
+        f"Error should mention adp/agent.yaml, got: {error_msg}"
+    )
+    assert "not found" in error_msg.lower(), (
+        f"Error should indicate file not found, got: {error_msg}"
+    )
+
+
+def test_read_adp_agent_yaml_is_directory(tmp_path: Path):
+    """Test that read_adp raises FileNotFoundError when adp/agent.yaml is a directory."""
+    src = build_source(tmp_path)
+    pkg_dir = tmp_path / "oci"
+
+    # Create a package where adp/agent.yaml is a directory instead of a file
+    import json
+    import tarfile
+
+    # First create normal package
+    pkg = ADPackage.create_from_directory(src, pkg_dir)
+
+    # Get the layer path
+    index = json.loads((pkg_dir / "index.json").read_text())
+    manifest_digest = index["manifests"][0]["digest"].split(":")[1]
+    manifest = json.loads((pkg_dir / "blobs" / "sha256" / manifest_digest).read_text())
+    layer_digest = manifest["layers"][0]["digest"].split(":")[1]
+    layer_path = pkg_dir / "blobs" / "sha256" / layer_digest
+
+    # Create a new tar where adp/agent.yaml is a directory
+    corrupted_tar = tmp_path / "corrupted.tar"
+    with tarfile.open(layer_path, "r") as original:
+        with tarfile.open(corrupted_tar, "w") as new_tar:
+            for member in original.getmembers():
+                if member.name == "adp/agent.yaml":
+                    # Make it a directory
+                    member.type = tarfile.DIRTYPE
+                    new_tar.addfile(member)
+                else:
+                    file_obj = original.extractfile(member)
+                    if file_obj:
+                        new_tar.addfile(member, file_obj)
+
+    # Replace the layer
+    corrupted_tar.replace(layer_path)
+
+    # Try to read ADP - should fail with FileNotFoundError (extractfile returns None for directories)
+    with pytest.raises(FileNotFoundError) as exc_info:
+        pkg.read_adp()
+
+    error_msg = str(exc_info.value)
+    assert "adp/agent.yaml" in error_msg.lower(), (
+        f"Error should mention adp/agent.yaml, got: {error_msg}"
+    )
+    assert "not found" in error_msg.lower(), (
+        f"Error should indicate file not found, got: {error_msg}"
+    )

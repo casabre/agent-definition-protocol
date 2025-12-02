@@ -104,7 +104,7 @@ func TestValidateADPEmptyID(t *testing.T) {
 
 func TestValidateADPInvalidVersion(t *testing.T) {
 	adp := &ADP{
-		ADPVersion: "0.2.0",
+		ADPVersion: "0.3.0", // Invalid version (not 0.1.0 or 0.2.0)
 		ID:         "test",
 		Runtime:    Runtime{Execution: []RuntimeEntry{{Backend: "python", ID: "py", Entrypoint: "main:app"}}},
 		Flow:       map[string]interface{}{},
@@ -112,6 +112,48 @@ func TestValidateADPInvalidVersion(t *testing.T) {
 	}
 	if err := ValidateADP(adp); err == nil {
 		t.Fatal("expected validation error for invalid version")
+	}
+}
+
+func TestValidateADPV0_2_0(t *testing.T) {
+	adp := &ADP{
+		ADPVersion: "0.2.0",
+		ID:         "agent.v0.2.0",
+		Runtime: Runtime{
+			Execution: []RuntimeEntry{{Backend: "python", ID: "py", Entrypoint: "main:app"}},
+			Models: []Model{
+				{
+					ID:       "primary",
+					Provider: "openai",
+					Model:    "gpt-4",
+					APIKeyEnv: "OPENAI_API_KEY",
+				},
+			},
+		},
+		Flow: map[string]interface{}{
+			"id": "test.flow",
+			"graph": map[string]interface{}{
+				"nodes": []map[string]interface{}{
+					{"id": "input", "kind": "input"},
+					{"id": "llm", "kind": "llm", "model_ref": "primary"},
+					{"id": "tool", "kind": "tool", "tool_ref": "api"},
+					{"id": "output", "kind": "output"},
+				},
+				"edges": []interface{}{},
+				"start_nodes": []string{"input"},
+				"end_nodes": []string{"output"},
+			},
+		},
+		Evaluation: map[string]interface{}{},
+	}
+	if err := ValidateADP(adp); err != nil {
+		t.Fatalf("unexpected validation error for v0.2.0: %v", err)
+	}
+	if len(adp.Runtime.Models) != 1 {
+		t.Errorf("expected 1 model, got %d", len(adp.Runtime.Models))
+	}
+	if adp.Runtime.Models[0].ID != "primary" {
+		t.Errorf("expected model ID 'primary', got '%s'", adp.Runtime.Models[0].ID)
 	}
 }
 

@@ -47,7 +47,10 @@ func CreateADPKG(srcDir, outPath string) error {
 	if err := createTar(layerTar, srcDir); err != nil {
 		return err
 	}
-	layerBytes, _ := os.ReadFile(layerTar)
+	layerBytes, err := os.ReadFile(layerTar)
+	if err != nil {
+		return err
+	}
 	layerDigest := sha256Bytes(layerBytes)
 	if err := writeBlob(outPath, layerDigest, layerBytes); err != nil {
 		return err
@@ -70,7 +73,10 @@ func CreateADPKG(srcDir, outPath string) error {
 			},
 		},
 	}
-	manifestBytes, _ := json.MarshalIndent(manifest, "", "  ")
+	manifestBytes, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return err
+	}
 	manifestDigest := sha256Bytes(manifestBytes)
 	if err := writeBlob(outPath, manifestDigest, manifestBytes); err != nil {
 		return err
@@ -89,7 +95,10 @@ func CreateADPKG(srcDir, outPath string) error {
 			},
 		},
 	}
-	indexBytes, _ := json.MarshalIndent(index, "", "  ")
+	indexBytes, err := json.MarshalIndent(index, "", "  ")
+	if err != nil {
+		return err
+	}
 	if err := os.WriteFile(filepath.Join(outPath, "index.json"), indexBytes, 0o644); err != nil {
 		return err
 	}
