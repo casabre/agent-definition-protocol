@@ -11,7 +11,7 @@ Flows describe how an agent routes work across nodes. A flow is a directed graph
 ## Structure
 - `id` (required)
 - `graph`:
-  - `nodes[]` (required): each with `id`, `kind`, optional `label`, `params`, `ui`.
+  - `nodes[]` (required): each with `id`, `kind`, optional `label`, `params`, `tool_ref` (v0.2.0+), `ui`.
   - `edges[]`: `from`, `to`, optional `condition` (simple expression string).
   - `start_nodes[]`, `end_nodes[]`: arrays of node ids.
 - `ui` (optional): diagram hints under nodes: `label`, `icon`, `color`, `position {x,y}`.
