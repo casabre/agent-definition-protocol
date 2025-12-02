@@ -1,0 +1,17 @@
+{
+  "agent_id": "acme.analytics.agent",
+  "adp_version": "0.1.0",
+  "builder": {
+    "id": "adp-cli",
+    "version": "0.1.0"
+  },
+  "source": {
+    "repo": "https://github.com/acme/agent-suite",
+    "ref": "v1.1.0",
+    "path": "agents/analytics/"
+  },
+  "build_timestamp": "2024-01-15T10:30:00Z",
+  "build_tool": "adp pack",
+  "build_command": "adp pack --source examples/acme-analytics --output oci-package"
+}
+

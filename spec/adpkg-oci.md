@@ -33,6 +33,60 @@ This document describes the canonical packaging for ADP v0.1.0 using the OCI ima
 - **Trust policy**: Registries/consumers SHOULD define a trust policy to require signatures from approved identities and a valid SBOM; an example trust policy SHOULD be published with the implementation.
 - **Verification**: Implementations SHOULD expose a `verify` command to fetch signatures and SBOM referrers and fail closed when missing.
 
+## Verification
+
+Implementations SHOULD provide verification tools to validate OCI package structure and integrity.
+
+### Structure Verification
+
+1. **OCI Layout**: Verify `oci-layout` exists and contains `{"imageLayoutVersion": "1.0.0"}`
+2. **Index**: Verify `index.json` references exactly one manifest with media type `application/vnd.oci.image.manifest.v1+json`
+3. **Manifest**: Verify manifest exists at `blobs/sha256/<manifest-digest>` and contains:
+   - Config descriptor with media type `application/vnd.adp.config.v1+json`
+   - At least one layer with media type `application/vnd.adp.package.v1+tar`
+   - Annotations including `org.opencontainers.image.title` and `io.adp.version`
+4. **Config**: Verify config blob exists and contains required fields (`agent_id`, `adp_version`)
+5. **Package Layer**: Verify layer tar archive contains `/adp/agent.yaml`
+
+### Digest Verification
+
+- Verify all blob digests match their SHA-256 content
+- Config digest MUST match `sha256sum` of config blob
+- Layer digest MUST match `sha256sum` of layer tar archive
+- Manifest digest MUST match `sha256sum` of manifest JSON
+
+### Content Verification
+
+1. Extract package layer tar archive
+2. Verify `/adp/agent.yaml` exists and is valid YAML
+3. Validate ADP manifest against `schemas/adp.schema.json`
+4. Verify `/metadata/version.json` exists (if present) and matches config
+
+### Example Verification Script
+
+See `examples/oci-package/README.md` for a complete verification example using command-line tools and SDKs.
+
+### SDK Verification
+
+SDKs SHOULD provide `verify()` methods:
+
+```python
+# Python SDK
+from adp_sdk.adpkg import ADPackage
+
+pkg = ADPackage.open("oci-package")
+pkg.verify()  # Raises exception if invalid
+```
+
+```typescript
+// TypeScript SDK
+import { openPackage } from "./dist";
+
+const pkg = await openPackage("oci-package");
+await pkg.verify();  // Throws if invalid
+```
+
 ## Status
 - This is the canonical packaging for ADP v0.1.0.
 - Legacy OPC/ZIP is deprecated.
+- See `examples/oci-package/` for a complete example structure.

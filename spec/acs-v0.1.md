@@ -1,4 +1,4 @@
-# Agent Container Spec (ACS) v0.1
+# Agent Container Spec (ACS) v0.1.0
 
 ## Purpose
 
@@ -7,7 +7,7 @@ ACS describes how to build and run a container for an ADP-defined agent. It is Y
 ## Top-level structure
 
 ```yaml
-acs_version: "0.1"
+acs_version: "0.1.0"
 base_image: "python:3.12-slim"
 
 build:
@@ -89,4 +89,8 @@ Hooks that tie container lifecycle to evaluation.
 
 ## Versioning
 
-This document defines v0.1 of ACS. Future versions may add richer build and runtime hooks and will provide migration notes.
+This document defines v0.1.0 of ACS. Future versions may add richer build and runtime hooks and will provide migration notes.
+
+## Schema
+
+A JSON Schema for ACS is provided at `schemas/acs.schema.json`.

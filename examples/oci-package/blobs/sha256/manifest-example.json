@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 2,
+  "mediaType": "application/vnd.oci.image.manifest.v1+json",
+  "config": {
+    "mediaType": "application/vnd.adp.config.v1+json",
+    "digest": "sha256:config-digest-placeholder",
+    "size": 512
+  },
+  "layers": [
+    {
+      "mediaType": "application/vnd.adp.package.v1+tar",
+      "digest": "sha256:layer-digest-placeholder",
+      "size": 8192
+    }
+  ],
+  "annotations": {
+    "org.opencontainers.image.title": "acme.analytics.agent",
+    "org.opencontainers.image.created": "2024-01-15T10:30:00Z",
+    "io.adp.version": "0.1.0",
+    "io.adp.agent.id": "acme.analytics.agent",
+    "io.adp.source.repo": "https://github.com/acme/agent-suite",
+    "io.adp.source.ref": "v1.1.0"
+  }
+}
+

@@ -1,0 +1,44 @@
+codecov:
+  require_ci_to_pass: yes
+
+coverage:
+  precision: 2
+  round: down
+  range: "70...100"
+  
+  status:
+    project:
+      default:
+        target: 80%
+        threshold: 1%
+    patch:
+      default:
+        target: 80%
+
+ignore:
+  - "**/tests/"
+  - "**/test/"
+  - "**/__pycache__/"
+  - "**/node_modules/"
+  - "**/dist/"
+  - "**/target/"
+  - "**/.venv/"
+
+flags:
+  python:
+    paths:
+      - sdk/python/adp_sdk/
+    carryforward: true
+  typescript:
+    paths:
+      - sdk/typescript/src/
+    carryforward: true
+  rust:
+    paths:
+      - sdk/rust/src/
+    carryforward: true
+  go:
+    paths:
+      - sdk/go/
+    carryforward: true
+

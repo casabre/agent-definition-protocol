@@ -21,19 +21,23 @@ class RuntimeModel(BaseModel):
 
 
 class FlowModel(BaseModel):
-    flow: dict[str, Any] = Field(default_factory=dict)
+    """Flow model - can be empty dict or contain flow structure."""
+
+    model_config = dict(extra="allow")
 
 
 class EvaluationModel(BaseModel):
-    evaluation: dict[str, Any] = Field(default_factory=dict)
+    """Evaluation model - can be empty dict or contain evaluation structure."""
+
+    model_config = dict(extra="allow")
 
 
 class ADP(BaseModel):
     adp_version: str
     id: str
     runtime: RuntimeModel
-    flow: FlowModel
-    evaluation: EvaluationModel
+    flow: dict[str, Any] | FlowModel = Field(default_factory=dict)
+    evaluation: dict[str, Any] | EvaluationModel = Field(default_factory=dict)
     name: str | None = None
     description: str | None = None
 
