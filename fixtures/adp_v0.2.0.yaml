@@ -1,0 +1,53 @@
+adp_version: "0.2.0"
+id: "fixture.acme.v0.2.0"
+name: "ACME Agent v0.2.0 with ESP features"
+runtime:
+  execution:
+    - backend: "python"
+      id: "py"
+      entrypoint: "agent.main:app"
+  models:
+    - id: "primary"
+      provider: "openai"
+      model: "gpt-4"
+      api_key_env: "OPENAI_API_KEY"
+flow:
+  id: "fixture.flow.v0.2.0"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+      - id: "llm-node"
+        kind: "llm"
+        model_ref: "primary"
+        system_prompt_ref: "prompts.system"
+        prompt_ref: "prompts.user"
+      - id: "tool-node"
+        kind: "tool"
+        tool_ref: "metrics-api"
+      - id: "output"
+        kind: "output"
+    edges:
+      - { from: "input", to: "llm-node" }
+      - { from: "llm-node", to: "tool-node" }
+      - { from: "tool-node", to: "output" }
+    start_nodes: ["input"]
+    end_nodes: ["output"]
+prompts:
+  system: "You are a helpful assistant."
+  user: "Answer the user's question."
+tools:
+  http_apis:
+    - id: "metrics-api"
+      description: "Metrics API"
+      base_url: "https://api.example.com"
+evaluation:
+  suites:
+    - id: "suite1"
+      metrics:
+        - id: "m1"
+          type: "deterministic"
+          function: "noop"
+          scoring: "boolean"
+          threshold: true
+
