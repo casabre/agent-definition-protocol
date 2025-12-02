@@ -137,7 +137,15 @@ jobs:
 
   summary:
     runs-on: ubuntu-latest
-    needs: [lint-python, test-python, test-typescript, test-rust, test-go, validate-schemas]
+    needs:
+      [
+        lint-python,
+        test-python,
+        test-typescript,
+        test-rust,
+        test-go,
+        validate-schemas,
+      ]
     steps:
       - run: echo "All jobs completed."
 
@@ -161,5 +169,5 @@ jobs:
           flags: python,typescript,go,rust
           name: codecov-umbrella
           token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
+          fail_ci_if_error: true
           verbose: true
