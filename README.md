@@ -7,11 +7,12 @@ Agent Definition Protocol (ADP) is a lightweight, open specification for describ
 
 **Define an agent once, run it anywhere, and keep evaluation and governance attached using your existing tools.**
 
+Why care? ADP v0.1.0 keeps the critical context glued to the agent: multi-backend runtimes (Docker/WASM/Python/TS/binary/custom), flow graphs (AFG v0.1), evaluation suites/KPIs, telemetry, and guardrails. You get faster rollouts with portable packages and predictable deployments—without compromising accuracy, efficiency, security, or governance. OCI-based packaging, provenance/signing (Notary v2 + SBOM guidance), and cross-SDK validation are first-class; composition (extends/import/overrides) is a future feature.
+
 ## Topics
 
 `ai-agents` `agent-definition` `agent-runtime` `agent-evaluation` `agent-governance` `agent-packaging` `oci-artifacts` `open-standard` `open-specification` `yaml` `json-schema` `multi-backend` `docker` `wasm` `python` `typescript` `rust` `go` `sdk` `agent-flow` `agent-tools` `agent-memory` `agent-telemetry` `notary-v2` `sbom` `provenance` `agent-interoperability` `mcp` `a2a` `opentelemetry` `langgraph` `agent-deployment` `agent-distribution`
 
-Why care? ADP v0.1.0 keeps the critical context glued to the agent: multi-backend runtimes (Docker/WASM/Python/TS/binary/custom), flow graphs (AFG v0.1), evaluation suites/KPIs, telemetry, and guardrails. You get faster rollouts with portable packages and predictable deployments—without compromising accuracy, efficiency, security, or governance. OCI-based packaging, provenance/signing (Notary v2 + SBOM guidance), and cross-SDK validation are first-class; composition (extends/import/overrides) is a future feature.
 
 ## What is included
 
