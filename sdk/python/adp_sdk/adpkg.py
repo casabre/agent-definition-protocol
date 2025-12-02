@@ -160,7 +160,10 @@ class ADPackage:
             self.path / "blobs" / layer_desc["digest"].replace("sha256:", "sha256/")
         )
         with tarfile.open(layer_path, "r") as tar:
-            member = tar.extractfile("adp/agent.yaml")
+            try:
+                member = tar.extractfile("adp/agent.yaml")
+            except KeyError:
+                raise FileNotFoundError("adp/agent.yaml not found in layer")
             if not member:
                 raise FileNotFoundError("adp/agent.yaml not found in layer")
             data = member.read().decode()

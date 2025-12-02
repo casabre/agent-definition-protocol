@@ -6,7 +6,7 @@ fn validation_rejects_missing_execution() {
     let adp = Adp {
         adp_version: "0.1.0".into(),
         id: "agent.test".into(),
-        runtime: adp_sdk::adp::Runtime { execution: vec![] },
+        runtime: adp_sdk::adp::Runtime { execution: vec![], models: None },
         flow: serde_yaml::Value::Null,
         evaluation: serde_yaml::Value::Null,
     };
@@ -27,6 +27,7 @@ fn validation_accepts_basic() {
                 id: "py".into(),
                 entrypoint: Some("agent.main:app".into()),
             }],
+            models: None,
         },
         flow: serde_yaml::Value::Null,
         evaluation: serde_yaml::Value::Null,
@@ -37,7 +38,7 @@ fn validation_accepts_basic() {
 #[test]
 fn validation_rejects_invalid_version() {
     let adp = Adp {
-        adp_version: "0.2.0".into(), // Invalid version
+        adp_version: "0.3.0".into(), // Invalid version (not 0.1.0 or 0.2.0)
         id: "agent.test".into(),
         runtime: adp_sdk::adp::Runtime {
             execution: vec![adp_sdk::adp::RuntimeEntry {
@@ -45,11 +46,59 @@ fn validation_rejects_invalid_version() {
                 id: "py".into(),
                 entrypoint: Some("agent.main:app".into()),
             }],
+            models: None,
         },
         flow: serde_yaml::Value::Null,
         evaluation: serde_yaml::Value::Null,
     };
     assert!(validate_adp(&adp).is_err(), "Should reject invalid version");
+}
+
+#[test]
+fn validation_accepts_v0_2_0() {
+    let adp = Adp {
+        adp_version: "0.2.0".into(),
+        id: "agent.v0.2.0".into(),
+        runtime: adp_sdk::adp::Runtime {
+            execution: vec![adp_sdk::adp::RuntimeEntry {
+                backend: "python".into(),
+                id: "py".into(),
+                entrypoint: Some("agent.main:app".into()),
+            }],
+            models: Some(vec![adp_sdk::adp::Model {
+                id: "primary".into(),
+                provider: "openai".into(),
+                model: "gpt-4".into(),
+                api_key_env: Some("OPENAI_API_KEY".into()),
+                base_url: None,
+                temperature: None,
+                max_tokens: None,
+                extensions: None,
+            }]),
+        },
+        flow: serde_yaml::from_str(r#"
+id: "test.flow"
+graph:
+  nodes:
+    - id: "input"
+      kind: "input"
+    - id: "llm"
+      kind: "llm"
+      model_ref: "primary"
+    - id: "tool"
+      kind: "tool"
+      tool_ref: "api"
+    - id: "output"
+      kind: "output"
+  edges: []
+  start_nodes: ["input"]
+  end_nodes: ["output"]
+"#).unwrap(),
+        evaluation: serde_yaml::Value::Null,
+    };
+    assert!(validate_adp(&adp).is_ok(), "Should accept v0.2.0 ADP");
+    assert_eq!(adp.runtime.models.as_ref().unwrap().len(), 1, "Should have 1 model");
+    assert_eq!(adp.runtime.models.as_ref().unwrap()[0].id, "primary", "Model ID should be 'primary'");
 }
 
 #[test]
@@ -63,6 +112,7 @@ fn validation_rejects_empty_id() {
                 id: "py".into(),
                 entrypoint: Some("agent.main:app".into()),
             }],
+            models: None,
         },
         flow: serde_yaml::Value::Null,
         evaluation: serde_yaml::Value::Null,
@@ -102,6 +152,7 @@ fn validation_accepts_multiple_backends() {
                     entrypoint: None,
                 },
             ],
+            models: None,
         },
         flow: serde_yaml::Value::Null,
         evaluation: serde_yaml::Value::Null,
@@ -123,6 +174,7 @@ fn validation_accepts_different_backend_types() {
                     id: format!("{}-id", backend),
                     entrypoint: None,
                 }],
+                models: None,
             },
             flow: serde_yaml::Value::Null,
             evaluation: serde_yaml::Value::Null,
@@ -155,6 +207,7 @@ graph:
                 id: "py".into(),
                 entrypoint: Some("main:app".into()),
             }],
+            models: None,
         },
         flow: flow_yaml,
         evaluation: serde_yaml::Value::Null,
@@ -184,6 +237,7 @@ suites:
                 id: "py".into(),
                 entrypoint: Some("main:app".into()),
             }],
+            models: None,
         },
         flow: serde_yaml::Value::Null,
         evaluation: eval_yaml,

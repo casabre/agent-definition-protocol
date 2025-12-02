@@ -25,7 +25,7 @@ pub fn blob_path(root: &Path, digest: &str) -> std::path::PathBuf {
 
 pub fn create_adpkg(src_dir: &str, out_dir: &str) -> Result<(), Box<dyn std::error::Error>> {
     let adp_path = Path::new(src_dir).join("adp/agent.yaml");
-    let adp = crate::adp::load_adp(adp_path.to_str().unwrap())?;
+    let adp = crate::adp::load_adp(adp_path.to_str().ok_or("Invalid path")?)?;
     validate_adp(&adp)?;
 
     let out = Path::new(out_dir);

@@ -11,8 +11,20 @@ type RuntimeEntry struct {
     Entrypoint string `yaml:"entrypoint"`
 }
 
+type Model struct {
+    ID          string                 `yaml:"id"`
+    Provider    string                 `yaml:"provider"`
+    Model       string                 `yaml:"model"`
+    APIKeyEnv   string                 `yaml:"api_key_env,omitempty"`
+    BaseURL     string                 `yaml:"base_url,omitempty"`
+    Temperature *float64               `yaml:"temperature,omitempty"`
+    MaxTokens   *int                   `yaml:"max_tokens,omitempty"`
+    Extensions  map[string]interface{} `yaml:"extensions,omitempty"`
+}
+
 type Runtime struct {
     Execution []RuntimeEntry `yaml:"execution"`
+    Models   []Model        `yaml:"models,omitempty"`
 }
 
 type ADP struct {

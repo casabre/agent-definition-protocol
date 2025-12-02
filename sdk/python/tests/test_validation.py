@@ -66,7 +66,7 @@ def test_validate_missing_required_fields():
 def test_validate_invalid_adp_version():
     """Test validation fails with invalid adp_version."""
     adp = ADP(
-        adp_version="0.2.0",  # Invalid version
+        adp_version="0.3.0",  # Invalid version (not 0.1.0 or 0.2.0)
         id="agent.test",
         runtime=RuntimeModel(execution=[
             RuntimeEntry(backend="python", id="py", entrypoint="main:app")
@@ -76,7 +76,35 @@ def test_validate_invalid_adp_version():
     )
     errors = validate_adp(adp)
     assert len(errors) > 0, "Expected validation errors for invalid version"
-    assert any("0.1.0" in err or "version" in err.lower() for err in errors)
+    assert any("0.1.0" in err or "0.2.0" in err or "version" in err.lower() or "enum" in err.lower() for err in errors)
+
+
+def test_validate_v0_2_0_adp():
+    """Test validation of ADP v0.2.0 with ESP features."""
+    adp = ADP(
+        adp_version="0.2.0",
+        id="agent.v0.2.0",
+        runtime=RuntimeModel(execution=[
+            RuntimeEntry(backend="python", id="py", entrypoint="main:app")
+        ]),
+        flow={
+            "id": "test.flow",
+            "graph": {
+                "nodes": [
+                    {"id": "input", "kind": "input"},
+                    {"id": "llm", "kind": "llm", "model_ref": "primary"},
+                    {"id": "tool", "kind": "tool", "tool_ref": "api"},
+                    {"id": "output", "kind": "output"}
+                ],
+                "edges": [],
+                "start_nodes": ["input"],
+                "end_nodes": ["output"]
+            }
+        },
+        evaluation=EvaluationModel(),
+    )
+    errors = validate_adp(adp)
+    assert len(errors) == 0, f"Expected no errors for v0.2.0, got: {errors}"
 
 
 def test_validate_empty_id():
@@ -181,6 +209,27 @@ def test_validate_fixture_file():
     errors = validate_adp(adp)
     assert len(errors) == 0, f"Fixture should be valid, got errors: {errors}"
     assert adp.id == "fixture.acme.full"
+
+
+def test_validate_v0_2_0_fixture():
+    """Test validation against v0.2.0 fixture file."""
+    fixture_path = Path(__file__).resolve().parents[2].parent / "fixtures" / "adp_v0.2.0.yaml"
+    if not fixture_path.exists():
+        pytest.skip(f"Fixture not found: {fixture_path}")
+    
+    adp = ADP.from_file(fixture_path)
+    errors = validate_adp(adp)
+    assert len(errors) == 0, f"v0.2.0 fixture should be valid, got errors: {errors}"
+    assert adp.id == "fixture.acme.v0.2.0"
+    assert adp.adp_version == "0.2.0"
+    # Verify v0.2.0 features are present
+    flow_data = adp.flow if isinstance(adp.flow, dict) else adp.flow.model_dump()
+    if isinstance(flow_data, dict) and "graph" in flow_data:
+        nodes = flow_data.get("graph", {}).get("nodes", [])
+        # Check for tool_ref and model_ref
+        has_tool_ref = any(node.get("tool_ref") for node in nodes if isinstance(node, dict))
+        has_model_ref = any(node.get("model_ref") for node in nodes if isinstance(node, dict))
+        assert has_tool_ref or has_model_ref, "v0.2.0 fixture should have tool_ref or model_ref"
 
 
 def test_validate_backend_types():
