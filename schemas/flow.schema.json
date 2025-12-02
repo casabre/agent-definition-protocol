@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.com/schemas/flow.schema.json",
-  "title": "AFG Flow v0.1",
+  "title": "AFG Flow v0.2",
   "type": "object",
   "required": ["id", "graph"],
   "properties": {
@@ -69,6 +69,8 @@
         "label": {"type": "string"},
         "model_ref": {"type": "string"},
         "system_prompt_ref": {"type": "string"},
+        "prompt_ref": {"type": "string"},
+        "tool_ref": {"type": "string", "description": "References a tool ID from tools.* arrays (v0.2.0+)"},
         "strategy": {"type": "string"},
         "params": {"type": "object", "additionalProperties": true},
         "ui": {"$ref": "#/definitions/ui"},

@@ -40,5 +40,29 @@ Runtimes describe how agents execute across multiple backends. ADP v0.1.0 formal
 - `ports`: Port mappings (strings like `8080:8080`) or list of ints (for docker).
 - `extensions`: Vendor-specific extensions under `extensions.*`.
 
+## Models (v0.2.0+)
+
+`runtime.models[]` (optional): Array of model configurations for LLM nodes. Each model includes:
+- `id` (required): Model reference identifier used by `flow.graph.nodes[].model_ref`
+- `provider` (required): Provider name (e.g., "openai", "anthropic", "custom")
+- `model` (required): Provider-specific model identifier
+- `api_key_env` (optional): Environment variable name for API key
+- `base_url` (optional): Provider-specific base URL
+- `temperature` (optional): Default temperature parameter
+- `max_tokens` (optional): Default max tokens parameter
+- `extensions` (optional): Provider-specific extensions
+
+Example:
+```yaml
+runtime:
+  models:
+    - id: "primary"
+      provider: "openai"
+      model: "gpt-4"
+      api_key_env: "OPENAI_API_KEY"
+```
+
+See [ESP Specification](esp.md) for model resolution semantics.
+
 ## ACME runtime example
 See `examples/runtime/acme-runtime-example.yaml` for a composite runtime with docker, wasm, python, typescript, binary, and custom backends.
