@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.com/schemas/adp.schema.json",
-  "title": "Agent Definition Protocol v0.1.0",
+  "title": "Agent Definition Protocol v0.2.0",
   "type": "object",
   "required": ["adp_version", "id", "runtime", "flow", "evaluation"],
   "properties": {
-    "adp_version": {"type": "string", "const": "0.1.0"},
+    "adp_version": {"type": "string", "enum": ["0.1.0", "0.2.0"]},
     "id": {"type": "string", "minLength": 1},
     "name": {"type": "string"},
     "description": {"type": "string"},
