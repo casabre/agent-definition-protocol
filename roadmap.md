@@ -1,6 +1,44 @@
 # ADP Roadmap
 
-This document outlines planned features for future ADP releases.
+This document outlines current versioning, a high-level perspective from submission to 1.0, and planned features for future releases.
+
+---
+
+## Current state (versioning and features)
+
+| Area                                    | Version / status                                                                               |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **ADP manifest**                        | v0.1.0 spec; schema supports `adp_version` 0.1.0 and 0.2.0                                     |
+| **ESP (Execution Semantics Profile)**   | v0.2.0; framework-neutral execution contract for runners                                       |
+| **Runtime / flow / evaluation schemas** | Published; v0.2.0 titles where extended (e.g. models, node refs)                               |
+| **ADPKG (OCI packaging)**               | Spec in `spec/adpkg-oci.md`; provenance/signing guidance                                       |
+| **Conformance**                         | `spec/conformance.md`: ADP-Minimal, ADP-Full, ESP-conformant runners; fixtures and validate.sh |
+| **SDKs**                                | Python, TypeScript, Rust, Go: validate, pack, unpack, inspect                                  |
+| **Governance / provenance**             | Normative prose and roadmap in `spec/governance-provenance.md`; full tooling TBD               |
+
+Composition (extends/import/overrides) is **not** yet specified; see section below.
+
+---
+
+## Perspective: submission → review → 1.0
+
+High-level path from foundation submission to a stable 1.0:
+
+1. **Submission ([Agentic AI Foundation](https://aaif.io))**  
+   Submit ADP + ESP as a draft specification (e.g. sandbox or similar stage) to the [Agentic AI Foundation](https://aaif.io) for ecosystem visibility and neutral hosting.
+
+2. **Review draft**  
+   Address feedback from the foundation and the community; refine narrative, scope, and optional semantics (ESP); align with other agent standards (MCP, A2A, OTel) where relevant.
+
+3. **Work toward 1.0**  
+   - Stabilize manifest and packaging (backward-compatibility expectations).  
+   - Complete governance and provenance specifications and reference tooling.  
+   - Publish conformance tests and, if applicable, a conformance program.  
+   - Target a v1.0.0 release with clear stability and compatibility guarantees.
+
+This perspective is indicative; actual stages and names depend on the foundation’s process.
+
+---
 
 ## v0.2.0 (Planned)
 
@@ -50,7 +88,7 @@ See `spec/governance-provenance.md` for current status and roadmap details.
 
 ## v1.0.0 (Future)
 
-- Stable API with backward compatibility guarantees
-- Complete governance and provenance specifications
-- Standardization body submission
-- Production-ready tooling and ecosystem
+- Stable manifest and packaging with backward-compatibility guarantees
+- Complete governance and provenance specifications and reference tooling
+- Conformance program and published test suite
+- Production-ready tooling and ecosystem; alignment with foundation (e.g. AAIF) and related standards
