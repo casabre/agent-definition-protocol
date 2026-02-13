@@ -3,6 +3,8 @@
 [![CI](https://github.com/casabre/agent-definition-protocol/actions/workflows/ci.yml/badge.svg)](https://github.com/casabre/agent-definition-protocol/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/casabre/agent-definition-protocol/branch/main/graph/badge.svg)](https://codecov.io/gh/casabre/agent-definition-protocol)
 
+![ADP logo](docs/images/logo.png)
+
 Agent Definition Protocol (ADP) is a lightweight, open specification for describing AI agents—the configuration under which they run—and how they are shipped. It treats agents like first-class software artifacts: declare runtime, tools, flows, evaluation, and governance once, then move them between laptops, CI, and production without rewriting glue.
 
 **Define an agent once, run it anywhere, and keep evaluation and governance attached using your existing tools.** Runtimes and frameworks that consume ADP manifests enable this; ADP is the portable definition format they use.
