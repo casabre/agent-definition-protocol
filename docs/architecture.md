@@ -116,11 +116,11 @@ ADP Manifest
 ## Data Flow
 
 ```
-┌─────────────┐
-│   Developer │
-│   creates   │
+┌──────────────┐
+│   Developer  │
+│   creates    │
 │  ADP manifest│
-└──────┬──────┘
+└──────┬───────┘
        │
        ▼
 ┌─────────────────┐
