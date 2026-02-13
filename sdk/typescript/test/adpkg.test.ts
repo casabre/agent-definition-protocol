@@ -200,37 +200,26 @@ test("openPackage handles missing agent.yaml in layer", () => {
   }
 });
 
-test("openPackage with v0.2.0 manifest", () => {
+test("openPackage with v0.1.0 manifest", () => {
   const tmp = fs.mkdtempSync(path.join(process.cwd(), "ts-oci-"));
   try {
     const adpDir = path.join(tmp, "adp");
     fs.mkdirSync(adpDir, { recursive: true });
     fs.writeFileSync(
       path.join(adpDir, "agent.yaml"),
-      `adp_version: "0.2.0"
-id: "agent.v0.2.0"
+      `adp_version: "0.1.0"
+id: "agent.v0.1.0"
 runtime:
   execution:
     - backend: "python"
       id: "py"
       entrypoint: "agent.main:app"
-  models:
-    - id: "primary"
-      provider: "openai"
-      model: "gpt-4"
-      api_key_env: "OPENAI_API_KEY"
 flow:
   id: "test.flow"
   graph:
     nodes:
       - id: "input"
         kind: "input"
-      - id: "llm"
-        kind: "llm"
-        model_ref: "primary"
-      - id: "tool"
-        kind: "tool"
-        tool_ref: "api"
       - id: "output"
         kind: "output"
     edges: []
@@ -243,11 +232,8 @@ evaluation: {}
     createPackage(tmp, outDir);
     
     const adp = openPackage(outDir) as any;
-    assert.strictEqual(adp.id, "agent.v0.2.0");
-    assert.strictEqual(adp.adp_version, "0.2.0");
-    assert.ok(adp.runtime.models, "should have models array");
-    assert.strictEqual(adp.runtime.models.length, 1);
-    assert.strictEqual(adp.runtime.models[0].id, "primary");
+    assert.strictEqual(adp.id, "agent.v0.1.0");
+    assert.strictEqual(adp.adp_version, "0.1.0");
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

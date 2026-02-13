@@ -64,9 +64,9 @@ tools:
 
 **Benefits**:
 - Single source of truth
-- Package once, deploy anywhere
+- Package once; your platform can deploy anywhere using the manifest's deployment metadata
 - Evaluation attached to agent
-- Automated deployment from manifest
+- Deployment targets and metadata from the manifest; your pipeline or platform performs deployment
 
 ```bash
 # Simple deployment
@@ -74,6 +74,8 @@ adp pack --source . --output oci-package
 adp push oci-package registry.acme.com/agents/analytics:1.0.0
 adp deploy registry.acme.com/agents/analytics:1.0.0 --env prod
 ```
+
+*Note: The above commands are illustrative. ADP specifies the manifest and package format; deployment tooling (e.g. a hypothetical `adp` CLI) is out of scope—your platform or tooling performs deployment.*
 
 ## Use Case 2: Multi-Backend Agent Deployment
 
@@ -141,7 +143,7 @@ runtime:
 - Runtime handles orchestration
 
 ```bash
-# Single command deploys everything
+# Single command deploys everything (example: tooling that consumes ADP)
 adp deploy agent.yaml --env prod
 # Runtime handles:
 # - Docker container

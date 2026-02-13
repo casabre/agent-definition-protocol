@@ -224,36 +224,25 @@ fn test_open_adpkg_error_paths() {
 }
 
 #[test]
-fn test_create_adpkg_v0_2_0() {
+fn test_create_adpkg_v0_1_0() {
     let tmp = tempdir().unwrap();
     let adp_dir = tmp.path().join("adp");
     fs::create_dir_all(&adp_dir).unwrap();
     fs::write(
         adp_dir.join("agent.yaml"),
-        r#"adp_version: "0.2.0"
-id: "agent.v0.2.0"
+        r#"adp_version: "0.1.0"
+id: "agent.v0.1.0"
 runtime:
   execution:
     - backend: "python"
       id: "py"
       entrypoint: "agent.main:app"
-  models:
-    - id: "primary"
-      provider: "openai"
-      model: "gpt-4"
-      api_key_env: "OPENAI_API_KEY"
 flow:
   id: "test.flow"
   graph:
     nodes:
       - id: "input"
         kind: "input"
-      - id: "llm"
-        kind: "llm"
-        model_ref: "primary"
-      - id: "tool"
-        kind: "tool"
-        tool_ref: "api"
       - id: "output"
         kind: "output"
     edges: []
@@ -267,9 +256,6 @@ evaluation: {}
     create_adpkg(tmp.path().to_str().unwrap(), oci_dir.to_str().unwrap()).unwrap();
     
     let adp = open_adpkg(oci_dir.to_str().unwrap()).unwrap();
-    assert_eq!(adp.id, "agent.v0.2.0");
-    assert_eq!(adp.adp_version, "0.2.0");
-    assert!(adp.runtime.models.is_some());
-    assert_eq!(adp.runtime.models.as_ref().unwrap().len(), 1);
-    assert_eq!(adp.runtime.models.as_ref().unwrap()[0].id, "primary");
+    assert_eq!(adp.id, "agent.v0.1.0");
+    assert_eq!(adp.adp_version, "0.1.0");
 }

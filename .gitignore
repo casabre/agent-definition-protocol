@@ -22,3 +22,5 @@ sdk/typescript/ts-oci*
 sdk/rust/coverage.lcov
 sdk/rust/target/
 sdk/go/coverage.out
+
+reports/

@@ -27,6 +27,9 @@ This document describes the canonical packaging for ADP v0.1.0 using the OCI ima
 - Manifest: OCI default (`application/vnd.oci.image.manifest.v1+json`)
 
 ## Provenance and Signing (normative profile)
+
+The following requirements apply to implementations that build packaging or verification tooling; ADP is a specification and format, not a tool.
+
 - **Signatures**: MUST use Notary v2 for manifest signatures; signatures MUST cover the ADP package layer and config.
 - **SBOM**: MUST include an SPDX JSON SBOM as an OCI referrer or additional layer with media type `application/vnd.adp.sbom.v1+json`.
 - **Build metadata**: Config MUST include builder id, source repo URL, ref, and build timestamp; these SHOULD also appear as OCI annotations.

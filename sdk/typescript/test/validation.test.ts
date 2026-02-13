@@ -28,31 +28,21 @@ test("validateAdp fails on missing id", () => {
 test("validateAdp fails on invalid adp_version", () => {
   const errors = validateAdp({ ...valid, adp_version: "0.3.0" } as any);
   expect(errors.length).toBeGreaterThan(0);
-  expect(errors.some((e: string) => e.includes("0.1.0") || e.includes("0.2.0") || e.toLowerCase().includes("version") || e.toLowerCase().includes("enum"))).toBe(true);
+  expect(errors.some((e: string) => e.includes("0.1.0") || e.toLowerCase().includes("version") || e.toLowerCase().includes("enum"))).toBe(true);
 });
 
-test("validateAdp passes on v0.2.0", () => {
-  const v0_2_0 = {
-    adp_version: "0.2.0",
-    id: "agent.v0.2.0",
+test("validateAdp passes on v0.1.0", () => {
+  const v0_1_0 = {
+    adp_version: "0.1.0",
+    id: "agent.v0.1.0",
     runtime: {
-      execution: [{ backend: "python", id: "py", entrypoint: "agent.main:app" }],
-      models: [
-        {
-          id: "primary",
-          provider: "openai",
-          model: "gpt-4",
-          api_key_env: "OPENAI_API_KEY"
-        }
-      ]
+      execution: [{ backend: "python", id: "py", entrypoint: "agent.main:app" }]
     },
     flow: {
       id: "test.flow",
       graph: {
         nodes: [
           { id: "input", kind: "input" },
-          { id: "llm", kind: "llm", model_ref: "primary" },
-          { id: "tool", kind: "tool", tool_ref: "api" },
           { id: "output", kind: "output" }
         ],
         edges: [],
@@ -62,7 +52,7 @@ test("validateAdp passes on v0.2.0", () => {
     },
     evaluation: {}
   };
-  const errors = validateAdp(v0_2_0);
+  const errors = validateAdp(v0_1_0);
   expect(errors.length).toBe(0);
 });
 

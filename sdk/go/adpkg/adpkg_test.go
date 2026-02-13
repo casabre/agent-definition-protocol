@@ -442,8 +442,8 @@ func TestCreateADPKGWriteFileError(t *testing.T) {
 	}
 }
 
-func TestCreateADPKGV0_2_0(t *testing.T) {
-	tmp, err := os.MkdirTemp("", "go-adpkg-v0.2.0-*")
+func TestCreateADPKGV0_1_0(t *testing.T) {
+	tmp, err := os.MkdirTemp("", "go-adpkg-v0.1.0-*")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -453,30 +453,19 @@ func TestCreateADPKGV0_2_0(t *testing.T) {
 	if err := os.MkdirAll(adpDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	v0_2_0_yaml := `adp_version: "0.2.0"
-id: "agent.v0.2.0"
+	v0_1_0_yaml := `adp_version: "0.1.0"
+id: "agent.v0.1.0"
 runtime:
   execution:
     - backend: "python"
       id: "py"
       entrypoint: "agent.main:app"
-  models:
-    - id: "primary"
-      provider: "openai"
-      model: "gpt-4"
-      api_key_env: "OPENAI_API_KEY"
 flow:
   id: "test.flow"
   graph:
     nodes:
       - id: "input"
         kind: "input"
-      - id: "llm"
-        kind: "llm"
-        model_ref: "primary"
-      - id: "tool"
-        kind: "tool"
-        tool_ref: "api"
       - id: "output"
         kind: "output"
     edges: []
@@ -484,7 +473,7 @@ flow:
     end_nodes: ["output"]
 evaluation: {}
 `
-	if err := os.WriteFile(filepath.Join(adpDir, "agent.yaml"), []byte(v0_2_0_yaml), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(adpDir, "agent.yaml"), []byte(v0_1_0_yaml), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	

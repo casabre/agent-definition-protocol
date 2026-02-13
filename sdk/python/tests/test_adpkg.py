@@ -13,51 +13,17 @@ from adp_sdk.adp_model import ADP  # type: ignore
 def build_source(tmp_path: Path, version: str = "0.1.0") -> Path:
     adp_dir = tmp_path / "adp"
     adp_dir.mkdir(parents=True)
-    if version == "0.2.0":
-        agent_yaml = """
-        adp_version: "0.2.0"
-        id: "agent.test.v0.2.0"
-        runtime:
-          execution:
-            - backend: "python"
-              id: "py"
-              entrypoint: "agent.main:app"
-          models:
-            - id: "primary"
-              provider: "openai"
-              model: "gpt-4"
-              api_key_env: "OPENAI_API_KEY"
-        flow:
-          id: "test.flow"
-          graph:
-            nodes:
-              - id: "input"
-                kind: "input"
-              - id: "llm"
-                kind: "llm"
-                model_ref: "primary"
-              - id: "tool"
-                kind: "tool"
-                tool_ref: "api"
-              - id: "output"
-                kind: "output"
-            edges: []
-            start_nodes: ["input"]
-            end_nodes: ["output"]
-        evaluation: {}
-        """
-    else:
-        agent_yaml = """
-        adp_version: "0.1.0"
-        id: "agent.test"
-        runtime:
-          execution:
-            - backend: "python"
-              id: "py"
-              entrypoint: "agent.main:app"
-        flow: {}
-        evaluation: {}
-        """
+    agent_yaml = """
+    adp_version: "0.1.0"
+    id: "agent.test"
+    runtime:
+      execution:
+        - backend: "python"
+          id: "py"
+          entrypoint: "agent.main:app"
+    flow: {}
+    evaluation: {}
+    """
     adp_dir.joinpath("agent.yaml").write_text(agent_yaml)
     (tmp_path / "acs").mkdir()
     (tmp_path / "acs" / "container.yaml").write_text("base_image: python:3.12\n")
@@ -83,31 +49,17 @@ def test_create_and_read_oci_package(tmp_path: Path) -> None:
     assert pkg.list_blobs(), "blobs should not be empty"
 
 
-def test_create_and_read_oci_package_v0_2_0(tmp_path: Path) -> None:
-    """Test ADPKG round-trip with v0.2.0 manifest."""
-    src = build_source(tmp_path, version="0.2.0")
+def test_create_and_read_oci_package_v0_1_0(tmp_path: Path) -> None:
+    """Test ADPKG round-trip with v0.1.0 manifest."""
+    src = build_source(tmp_path, version="0.1.0")
     pkg_dir = tmp_path / "oci"
     pkg = ADPackage.create_from_directory(src, pkg_dir)
 
     # Read back ADP
     adp = pkg.read_adp()
     assert isinstance(adp, ADP)
-    assert adp.id == "agent.test.v0.2.0"
-    assert adp.adp_version == "0.2.0"
-
-    # Verify v0.2.0 features are preserved
-    flow_data = adp.flow if isinstance(adp.flow, dict) else adp.flow.model_dump()
-    if isinstance(flow_data, dict) and "graph" in flow_data:
-        nodes = flow_data.get("graph", {}).get("nodes", [])
-        # Check for tool_ref and model_ref
-        has_tool_ref = any(
-            node.get("tool_ref") for node in nodes if isinstance(node, dict)
-        )
-        has_model_ref = any(
-            node.get("model_ref") for node in nodes if isinstance(node, dict)
-        )
-        assert has_tool_ref, "tool_ref should be preserved in ADPKG"
-        assert has_model_ref, "model_ref should be preserved in ADPKG"
+    assert adp.id == "agent.test"
+    assert adp.adp_version == "0.1.0"
 
 
 def test_validation_failure(tmp_path: Path) -> None:

@@ -10,8 +10,10 @@ fi
 # Validate ADP, runtime, flow, evaluation, minimal, and sample manifests against schemas.
 "$PYTHON_BIN" - <<'PY'
 import json
+import warnings
 from pathlib import Path
 
+warnings.filterwarnings("ignore", category=DeprecationWarning, message=".*RefResolver is deprecated.*")
 import yaml
 from jsonschema import Draft202012Validator, RefResolver
 
@@ -30,6 +32,7 @@ examples = {
         root / "examples" / "acme-analytics" / "adp" / "agent.yaml",
         root / "samples" / "python" / "langgraph" / "adp" / "agent.yaml",
         root / "fixtures" / "adp_full.yaml",
+        root / "fixtures" / "adp_v0.1.0.yaml",
     ],
     "runtime": [root / "examples" / "runtime" / "acme-runtime-example.yaml"],
     "flow": [root / "examples" / "flow" / "acme-flow-example.yaml", root / "samples" / "python" / "langgraph" / "flow.yaml"],

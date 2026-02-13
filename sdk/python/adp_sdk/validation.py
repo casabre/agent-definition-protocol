@@ -1,10 +1,18 @@
 from __future__ import annotations
 
 import json
+import warnings
 from pathlib import Path
 from typing import List
 
-from jsonschema import Draft202012Validator, RefResolver
+# RefResolver is deprecated in jsonschema 4.18+; suppress until migration to referencing
+with warnings.catch_warnings():
+    warnings.filterwarnings(
+        "ignore",
+        category=DeprecationWarning,
+        message=".*RefResolver is deprecated.*",
+    )
+    from jsonschema import Draft202012Validator, RefResolver
 
 from .adp_model import ADP
 

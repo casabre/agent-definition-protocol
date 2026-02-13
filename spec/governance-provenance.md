@@ -9,7 +9,7 @@ This document describes governance and provenance requirements for ADP v0.1.0. R
 
 ## Provenance (Normative)
 
-Provenance requirements are defined in the [ADPKG over OCI specification](adpkg-oci.md). This section summarizes key requirements.
+Provenance requirements are defined in the [ADPKG over OCI specification](adpkg-oci.md). This section summarizes key requirements. This section specifies requirements for implementations that build packaging or verification tooling; ADP itself is a specification and format, not a tool.
 
 ### Build Metadata
 

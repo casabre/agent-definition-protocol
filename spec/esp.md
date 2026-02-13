@@ -6,7 +6,7 @@
 
 ## Introduction & Scope
 
-The Execution Semantics Profile (ESP) defines **how ADP agents are interpreted and executed** by conformant runners. ESP fills semantic gaps identified in ADP v0.1.0 by specifying execution behavior without mandating implementation details.
+The Execution Semantics Profile (ESP) defines the **semantics that conformant runners use** when they interpret and execute ADP agents. ESP fills semantic gaps identified in ADP v0.1.0 by specifying execution behavior without mandating implementation details.
 
 ### What ESP Is
 

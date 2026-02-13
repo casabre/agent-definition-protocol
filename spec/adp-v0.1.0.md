@@ -6,9 +6,9 @@
 
 ## Purpose
 
-Agent Definition Protocol (ADP) defines a portable manifest for AI agents. It captures runtime, capabilities, tools, memory, evaluation, governance, and deployment details so an agent can be run and promoted across environments without losing context.
+Agent Definition Protocol (ADP) defines a portable manifest for AI agents. It captures runtime, capabilities, tools, memory, evaluation, governance, and deployment details so that a conformant runtime or framework can run and promote the agent across environments without losing context.
 
-**Define an agent once, run it anywhere, and keep evaluation and governance attached using your existing tools.**
+**Define an agent once, run it anywhere, and keep evaluation and governance attached using your existing tools.** Runtimes and frameworks that consume ADP manifests enable this; ADP is the portable definition format they use.
 
 ## Overview
 
@@ -180,7 +180,7 @@ governance:
 
 ### Deployment
 
-Deployment defines environment targets:
+Deployment defines environment targets. Deployment in ADP is descriptive (targets and endpoints); it does not define a deployment protocol or tool.
 
 ```yaml
 deployment:

@@ -161,6 +161,8 @@ ADP Manifest
 └─────────────────┘
 ```
 
+*A conformant runtime (not ADP) pulls the package and executes the agent according to the manifest.*
+
 ## Integration Points
 
 ### External Protocols

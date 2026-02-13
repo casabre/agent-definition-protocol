@@ -2,6 +2,16 @@
 
 This document defines how implementations demonstrate conformance to ADP v0.1.0 and ESP v0.2.0. RFC 2119 terms apply.
 
+## What Is a Conformant Runtime?
+
+A **conformant runtime** is any system that:
+
+- Consumes an ADP manifest
+- Interprets it according to ESP (if claiming ESP conformance), or according to its own semantics (if not)
+- Executes using its own implementation
+
+ADP does **not** maintain a registry of runtimes. Conformance means implementing the contract (schema, optional ESP semantics), not approval by ADP. Runtimes may support only subsets (e.g. ADP-Minimal, ESP-Basic). **ADP does not ship or endorse any runtime; it defines the contract runtimes may implement.**
+
 ## Conformance Classes
 
 ADP defines two conformance classes:
