@@ -13,6 +13,8 @@ ADP is analogous to OpenAPI or OCI: a portable description format that systems m
 
 Why care? ADP v0.1.0 keeps the critical context attached to the agent: multi-backend runtimes (Docker/WASM/Python/TS/binary/custom), flow graphs (AFG v0.1), evaluation suites/KPIs, telemetry, and guardrails. You get faster rollouts with portable packages and predictable deployment targets (described in the manifest); actual deployment is performed by your tooling or platform. OCI-based packaging and provenance/signing metadata and requirements (Notary v2 + SBOM guidance) are first-class in the spec; composition (extends/import/overrides) is a future feature.
 
+**Quick links:** [Main spec](spec/adp-v0.1.0.md) · [Spec index](spec/README.md) · [Conformance](spec/conformance.md) · [Roadmap](roadmap.md) · [Examples](examples/) · [Validate](scripts/validate.sh)
+
 ## Topics
 
 `ai-agents` `agent-definition` `agent-runtime` `agent-evaluation` `agent-governance` `agent-packaging` `oci-artifacts` `open-standard` `open-specification` `yaml` `json-schema` `multi-backend` `docker` `wasm` `python` `typescript` `rust` `go` `sdk` `agent-flow` `agent-tools` `agent-memory` `agent-telemetry` `notary-v2` `sbom` `provenance` `agent-interoperability` `mcp` `a2a` `opentelemetry` `langgraph` `agent-deployment` `agent-distribution`
@@ -39,10 +41,10 @@ Why care? ADP v0.1.0 keeps the critical context attached to the agent: multi-bac
 - **Runtime spec**: Multi-backend model (docker/wasm/python/typescript/binary/custom) with env/resources/logging/healthcheck.
 - **Flow (AFG v0.1)**: Graph of nodes/edges with UI metadata and vendor extensions.
 - **Evaluation v0.1.0**: Deterministic, LLM-judge, and telemetry evaluators with triggers and aggregation.
-- **SDKs**: Python, TypeScript, Rust, Go SDKs for validate/pack/unpack/inspect (OCI-based ADPKG; see `spec/adpkg-oci.md`). Conformance fixtures under `fixtures/` are shared across SDK tests.
+- **SDKs**: Python, TypeScript, Rust, Go SDKs for validate/pack/unpack/inspect (OCI-based ADPKG; see [spec/adpkg-oci.md](spec/adpkg-oci.md)). Conformance fixtures under `fixtures/` are shared across SDK tests.
 - **ACME examples**: Full agent plus focused runtime/flow/eval/minimal examples.
-- **LangGraph sample**: See `samples/python/langgraph/` for a minimal LangGraph agent packaged with ADP v0.1.0.
-- **Governance/Provenance (roadmap)**: See `spec/governance-provenance.md` for signing/SBOM/provenance plans.
+- **LangGraph sample**: See [samples/python/langgraph/](samples/python/langgraph/) for a minimal LangGraph agent packaged with ADP v0.1.0.
+- **Governance/Provenance (roadmap)**: See [spec/governance-provenance.md](spec/governance-provenance.md) for signing/SBOM/provenance plans.
 
 ## Interchange Model (Import / Export)
 
@@ -90,7 +92,7 @@ A **conformant runtime** is any system that:
 
 ADP does **not** maintain a registry of runtimes. Conformance means implementing the contract (schema, optional ESP semantics), not approval by ADP. Runtimes may support only subsets (e.g. ADP-Minimal, ESP-Basic). **ADP does not ship or endorse any runtime; it defines the contract runtimes may implement.**
 
-See `spec/conformance.md` for conformance classes and requirements.
+See [spec/conformance.md](spec/conformance.md) for conformance classes and requirements.
 
 ## Relationship to Other Protocols
 
@@ -114,16 +116,16 @@ ADP is designed to complement and integrate with existing standards:
 ### A2A (Agent-to-Agent)
 - **Integration**: ADP includes `interop.a2a` block for AgentCard compatibility
 - **Purpose**: A2A defines agent-to-agent communication; ADP provides a packaging format and deployment metadata (e.g. environment endpoints); it does not define deployment processes or tooling
-- **Relationship**: ADP can embed or reference A2A AgentCards for interoperability. See `spec/integrations/a2a-mapping.md` for detailed mapping
+- **Relationship**: ADP can embed or reference A2A AgentCards for interoperability. See [spec/integrations/a2a-mapping.md](spec/integrations/a2a-mapping.md) for detailed mapping.
 
 ### OpenTelemetry
 - **Integration**: ADP agents declare telemetry endpoints and metrics (`governance.telemetry_endpoint`, `evaluation.metrics[]`)
 - **Purpose**: OpenTelemetry provides observability standards; ADP declares what telemetry an agent emits
-- **Relationship**: ADP references OTel semantic conventions for metrics. See `spec/interop-mapping.md` for details
+- **Relationship**: ADP references OTel semantic conventions for metrics. See [spec/interop-mapping.md](spec/interop-mapping.md) for details.
 
 **Key Point**: ADP does not replace these protocols; it describes how they are used together in a single agent definition. ADP is a declarative manifest that references MCP tools, OCI packaging, HTTP APIs, and telemetry; orchestration is done by runtimes and frameworks that consume ADP.
 
-See `spec/interop-mapping.md` for detailed interoperability mappings.
+See [spec/interop-mapping.md](spec/interop-mapping.md) for detailed interoperability mappings.
 
 ## Minimal ADP example (v0.1.0)
 
@@ -145,7 +147,7 @@ evaluation: {}
 - SDKs provide programmatic validation and OCI packaging helpers.
 
 ## Composition (future)
-- See `roadmap.md` for the placeholder. Composition is not yet finalized for interoperability.
+- See [roadmap.md](roadmap.md) for the placeholder. Composition is not yet finalized for interoperability.
 
 ## SDKs (Python, TS, Rust, Go)
 - Python: `pip install -e sdk/python` then:
@@ -156,18 +158,18 @@ evaluation: {}
   pkg = ADPackage.create_from_directory("examples", "acme-oci")
   ```
 - TypeScript: `cd sdk/typescript && npm install && npm run build`, then `import { createPackage, openPackage } from "./dist";`
-- Rust/Go: see `sdk/rust/src/lib.rs` and `sdk/go/adp` for load/validate/create/open helpers.
+- Rust/Go: see [sdk/rust/src/lib.rs](sdk/rust/src/lib.rs) and [sdk/go/adp](sdk/go/adp) for load/validate/create/open helpers.
 
 ## Where to look
-- **Main spec**: `spec/adp-v0.1.0.md` (canonical entry point)
-- **Component specs**: `spec/` (runtime, flow, evaluation, minimal, adpkg-oci, governance-provenance)
-- **Spec overview**: `spec/README.md` (navigation guide)
-- Schemas: `schemas/`
-- Examples: `examples/` (minimal, runtime, flow, evaluation, full ADP)
-- Samples: `samples/python/langgraph/` (LangGraph OCI packaging)
-- Validation: `./scripts/validate.sh`
-- Conformance: see `spec/conformance.md` and negative fixtures in `fixtures/negative`
-- Compatibility: SemVer/stability in `spec/compatibility.md`
+- **Main spec**: [spec/adp-v0.1.0.md](spec/adp-v0.1.0.md) (canonical entry point)
+- **Component specs**: [spec/](spec/) — runtime, flow, evaluation, minimal, [adpkg-oci](spec/adpkg-oci.md), [governance-provenance](spec/governance-provenance.md)
+- **Spec overview**: [spec/README.md](spec/README.md) (navigation guide)
+- **Schemas**: [schemas/](schemas/)
+- **Examples**: [examples/](examples/) (minimal, runtime, flow, evaluation, full ADP)
+- **Samples**: [samples/python/langgraph/](samples/python/langgraph/) (LangGraph OCI packaging)
+- **Validation**: [scripts/validate.sh](scripts/validate.sh)
+- **Conformance**: [spec/conformance.md](spec/conformance.md) and negative fixtures in [fixtures/negative](fixtures/negative)
+- **Compatibility**: SemVer/stability in [spec/compatibility.md](spec/compatibility.md)
 
 ## Compatibility policy
 - ADP follows SemVer. Patch versions MUST remain backward-compatible; minor versions MAY add optional fields; major versions MAY break compatibility.
@@ -178,7 +180,7 @@ evaluation: {}
 - `./scripts/validate.sh` validates the ACME examples plus the LangGraph sample against the schemas for a quick cross-SDK sanity check.
 
 ## Provenance and signing
-- Packaging is OCI-first (`spec/adpkg-oci.md`) with guidance for Notary v2 signatures and SBOM attachment; see `spec/governance-provenance.md` for roadmap details and recommended provenance signals.
+- Packaging is OCI-first ([spec/adpkg-oci.md](spec/adpkg-oci.md)) with guidance for Notary v2 signatures and SBOM attachment; see [spec/governance-provenance.md](spec/governance-provenance.md) for roadmap details and recommended provenance signals.
 
 ## FAQ: Common Boundary Questions
 
@@ -210,15 +212,15 @@ It defines **format and semantics contracts** only.
 
 ## Getting started
 
-- Read the main specification: `spec/adp-v0.1.0.md`
-- Browse component specs: `spec/README.md` (navigation guide)
-- See walkthroughs: `docs/`
-- Try the ACME examples under `examples/` (minimal, runtime, flow, evaluation, full ADP).
-- Validate with `./scripts/validate.sh` (jsonschema) or the SDKs.
-- SDKs live under `sdk/` (Python, TypeScript, Rust, Go) for programmatic ADP/ADPKG handling.
+- Read the main specification: [spec/adp-v0.1.0.md](spec/adp-v0.1.0.md)
+- Browse component specs: [spec/README.md](spec/README.md) (navigation guide)
+- See walkthroughs: [docs/](docs/)
+- Try the ACME examples under [examples/](examples/) (minimal, runtime, flow, evaluation, full ADP).
+- Validate with [scripts/validate.sh](scripts/validate.sh) (jsonschema) or the SDKs.
+- SDKs live under [sdk/](sdk/) (Python, TypeScript, Rust, Go) for programmatic ADP/ADPKG handling.
 
 Future integrations: ADP is designed to plug into Agent-Dojo and AgentHub for conformance and distribution pipelines.
 
 ## Contributing
 
-Contributions are welcome! See `CONTRIBUTING.md`, `GOVERNANCE.md`, and `CODE_OF_CONDUCT.md`.
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md), [GOVERNANCE.md](GOVERNANCE.md), and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
