@@ -22,7 +22,13 @@ function writeBlob(blobsDir: string, digest: string, data: Buffer) {
   return data.length;
 }
 
-export function createPackage(srcDir: string, outDir: string) {
+export function createPackage(
+  srcDir: string,
+  outDir: string,
+  builderId = "",
+  sourceRepo = "",
+  sourceRef = "",
+) {
   const adpPath = path.join(srcDir, "adp", "agent.yaml");
   const adpContent = fs.readFileSync(adpPath, "utf8");
   const adpObj = yaml.load(adpContent) as any;
@@ -33,8 +39,15 @@ export function createPackage(srcDir: string, outDir: string) {
   const blobsRoot = path.join(outDir, "blobs");
   fs.mkdirSync(path.join(blobsRoot, "sha256"), { recursive: true });
 
-  // Config blob
-  const configBuf = Buffer.from(JSON.stringify({ agent_id: adpObj.id, adp_version: adpObj.adp_version }));
+  // Config blob with provenance fields
+  const configBuf = Buffer.from(JSON.stringify({
+    agent_id: adpObj.id,
+    adp_version: adpObj.adp_version,
+    "builder.id": builderId,
+    "source.repo": sourceRepo,
+    "source.ref": sourceRef,
+    build_timestamp: new Date().toISOString(),
+  }));
   const configDigest = sha256(configBuf);
   const configSize = writeBlob(blobsRoot, configDigest, configBuf);
 
@@ -69,6 +82,44 @@ export function createPackage(srcDir: string, outDir: string) {
   };
   fs.writeFileSync(path.join(outDir, "index.json"), JSON.stringify(index, null, 2));
   fs.writeFileSync(path.join(outDir, "oci-layout"), JSON.stringify(OCI_LAYOUT));
+}
+
+function blobPath(pkgDir: string, digest: string): string {
+  return path.join(pkgDir, "blobs", digest.replace("sha256:", "sha256/"));
+}
+
+export function inspectPackage(pkgDir: string): { agent_id: string; adp_version: string; layer_count: number; config: Record<string, unknown> } {
+  const index = JSON.parse(fs.readFileSync(path.join(pkgDir, "index.json"), "utf8"));
+  const manifestDesc = index.manifests[0];
+  const manifest = JSON.parse(fs.readFileSync(blobPath(pkgDir, manifestDesc.digest), "utf8"));
+  const config = JSON.parse(fs.readFileSync(blobPath(pkgDir, manifest.config.digest), "utf8"));
+  return {
+    agent_id: config.agent_id,
+    adp_version: config.adp_version,
+    layer_count: manifest.layers.length,
+    config,
+  };
+}
+
+export function verifyPackage(pkgDir: string): { passed: boolean; failures: string[] } {
+  const failures: string[] = [];
+  const index = JSON.parse(fs.readFileSync(path.join(pkgDir, "index.json"), "utf8"));
+  for (const entry of index.manifests ?? []) {
+    verifyBlob(pkgDir, entry.digest, failures);
+    const manifest = JSON.parse(fs.readFileSync(blobPath(pkgDir, entry.digest), "utf8"));
+    if (manifest.config?.digest) verifyBlob(pkgDir, manifest.config.digest, failures);
+    for (const layer of manifest.layers ?? []) {
+      if (layer.digest) verifyBlob(pkgDir, layer.digest, failures);
+    }
+  }
+  return { passed: failures.length === 0, failures };
+}
+
+function verifyBlob(pkgDir: string, digest: string, failures: string[]): void {
+  const bp = blobPath(pkgDir, digest);
+  if (!fs.existsSync(bp)) { failures.push(`${digest}: blob file missing`); return; }
+  const actual = sha256(fs.readFileSync(bp));
+  if (actual !== digest) failures.push(`${digest}: digest mismatch (actual ${actual})`);
 }
 
 export function openPackage(pkgDir: string) {

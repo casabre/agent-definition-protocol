@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.com/schemas/runtime.schema.json",
-  "title": "ADP Runtime v0.2.0",
+  "$id": "https://casabre.github.io/agent-definition-protocol/schemas/runtime.schema.json",
+  "title": "ADP Runtime v0.1.0",
   "type": "object",
   "required": ["execution"],
   "properties": {
@@ -11,6 +11,7 @@
       "items": {"$ref": "#/definitions/backend"}
     },
     "models": {
+      "$comment": "v0.2.0 — forward-declared; accepted but not formally specified in v0.1.0",
       "type": "array",
       "description": "Model configurations for LLM nodes (v0.2.0+)",
       "items": {"$ref": "#/definitions/model"},

@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.com/schemas/adp.schema.json",
-  "title": "Agent Definition Protocol v0.2.0",
+  "$id": "https://casabre.github.io/agent-definition-protocol/schemas/adp.schema.json",
+  "title": "Agent Definition Protocol v0.1.0",
   "type": "object",
   "required": ["adp_version", "id", "runtime", "flow", "evaluation"],
   "properties": {
-    "adp_version": {"type": "string", "enum": ["0.1.0", "0.2.0"]},
+    "adp_version": {"type": "string", "enum": ["0.1.0"], "$comment": "0.2.0 will be added when the v0.2.0 spec is published"},
     "id": {"type": "string", "minLength": 1},
     "name": {"type": "string"},
     "description": {"type": "string"},
@@ -111,6 +111,7 @@
       "additionalProperties": false
     },
     "guardrails": {
+      "$comment": "Forward-declared for v0.2.0; accepted but not formally specified in v0.1.0",
       "type": "object",
       "properties": {
         "policies": {"type": "array", "items": {"type": "string"}},

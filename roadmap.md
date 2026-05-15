@@ -8,9 +8,9 @@ This document outlines current versioning, a high-level perspective from submiss
 
 | Area                                    | Version / status                                                                               |
 | --------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| **ADP manifest**                        | v0.1.0 spec; schema supports `adp_version` 0.1.0 and 0.2.0                                     |
+| **ADP manifest**                        | v0.1.0 spec; schema validates `adp_version` 0.1.0 only (0.2.0 enum entry added when v0.2.0 spec is published) |
 | **ESP (Execution Semantics Profile)**   | v0.2.0; framework-neutral execution contract for runners                                       |
-| **Runtime / flow / evaluation schemas** | Published; v0.2.0 titles where extended (e.g. models, node refs)                               |
+| **Runtime / flow / evaluation schemas** | Published; v0.1.0 titles; `models[]` field forward-declared for v0.2.0                         |
 | **ADPKG (OCI packaging)**               | Spec in `spec/adpkg-oci.md`; provenance/signing guidance                                       |
 | **Conformance**                         | `spec/conformance.md`: ADP-Minimal, ADP-Full, ESP-conformant runners; fixtures and validate.sh |
 | **SDKs**                                | Python, TypeScript, Rust, Go: validate, pack, unpack, inspect                                  |

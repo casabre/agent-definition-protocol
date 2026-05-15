@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.com/schemas/evaluation.schema.json",
+  "$id": "https://casabre.github.io/agent-definition-protocol/schemas/evaluation.schema.json",
   "title": "ADP Evaluation v0.1.0",
   "type": "object",
   "required": ["suites"],
@@ -9,6 +9,18 @@
       "type": "array",
       "minItems": 1,
       "items": {"$ref": "#/definitions/suite"}
+    },
+    "promotion_policy": {
+      "$comment": "blocking: bool is deferred to v0.2.0",
+      "type": "object",
+      "properties": {
+        "require_passing_suites": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "IDs of suites that must pass before promotion"
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,

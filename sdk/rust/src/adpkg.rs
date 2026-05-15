@@ -1,6 +1,7 @@
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tar::Builder as TarBuilder;
 
 use crate::adp::Adp;
@@ -24,6 +25,16 @@ pub fn blob_path(root: &Path, digest: &str) -> std::path::PathBuf {
 }
 
 pub fn create_adpkg(src_dir: &str, out_dir: &str) -> Result<(), Box<dyn std::error::Error>> {
+    create_adpkg_with_provenance(src_dir, out_dir, "", "", "")
+}
+
+pub fn create_adpkg_with_provenance(
+    src_dir: &str,
+    out_dir: &str,
+    builder_id: &str,
+    source_repo: &str,
+    source_ref: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     let adp_path = Path::new(src_dir).join("adp/agent.yaml");
     let adp = crate::adp::load_adp(adp_path.to_str().ok_or("Invalid path")?)?;
     validate_adp(&adp)?;
@@ -33,8 +44,18 @@ pub fn create_adpkg(src_dir: &str, out_dir: &str) -> Result<(), Box<dyn std::err
     let out_abs = fs::canonicalize(out)?;
     let src_abs = fs::canonicalize(src_dir)?;
 
-    // config blob
-    let config = format!("{{\"agent_id\":\"{}\",\"adp_version\":\"{}\"}}", adp.id, adp.adp_version);
+    // config blob with provenance fields
+    let now_secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let build_timestamp = format!("{}", now_secs);
+    let config = serde_json::json!({
+        "agent_id": adp.id,
+        "adp_version": adp.adp_version,
+        "builder.id": builder_id,
+        "source.repo": source_repo,
+        "source.ref": source_ref,
+        "build_timestamp": build_timestamp,
+    }).to_string();
+
     let config_bytes = config.into_bytes();
     let config_digest = sha256_bytes(&config_bytes);
     fs::write(blob_path(out, &config_digest), &config_bytes)?;
@@ -81,6 +102,74 @@ pub fn create_adpkg(src_dir: &str, out_dir: &str) -> Result<(), Box<dyn std::err
     fs::write(out.join("index.json"), serde_json::to_vec_pretty(&index)?)?;
     fs::write(out.join("oci-layout"), OCI_LAYOUT)?;
     Ok(())
+}
+
+pub struct InspectResult {
+    pub agent_id: String,
+    pub adp_version: String,
+    pub layer_count: usize,
+    pub config: serde_json::Value,
+}
+
+pub struct VerifyResult {
+    pub passed: bool,
+    pub failures: Vec<String>,
+}
+
+pub fn inspect_adpkg(path: &str) -> Result<InspectResult, Box<dyn std::error::Error>> {
+    let root = Path::new(path);
+    let index: serde_json::Value = serde_json::from_reader(File::open(root.join("index.json"))?)?;
+    let manifest_digest = index["manifests"][0]["digest"].as_str().ok_or("missing manifest digest")?;
+    let manifest: serde_json::Value = serde_json::from_reader(File::open(blob_path(root, manifest_digest))?)?;
+    let config_digest = manifest["config"]["digest"].as_str().ok_or("missing config digest")?;
+    let config: serde_json::Value = serde_json::from_reader(File::open(blob_path(root, config_digest))?)?;
+    Ok(InspectResult {
+        agent_id: config["agent_id"].as_str().unwrap_or("").to_string(),
+        adp_version: config["adp_version"].as_str().unwrap_or("").to_string(),
+        layer_count: manifest["layers"].as_array().map(|a| a.len()).unwrap_or(0),
+        config,
+    })
+}
+
+pub fn verify_adpkg(path: &str) -> Result<VerifyResult, Box<dyn std::error::Error>> {
+    let root = Path::new(path);
+    let index: serde_json::Value = serde_json::from_reader(File::open(root.join("index.json"))?)?;
+    let mut failures = Vec::new();
+    if let Some(manifests) = index["manifests"].as_array() {
+        for entry in manifests {
+            let digest = entry["digest"].as_str().unwrap_or("");
+            verify_blob(root, digest, &mut failures);
+            let manifest_path = blob_path(root, digest);
+            if let Ok(f) = File::open(&manifest_path) {
+                let manifest: serde_json::Value = serde_json::from_reader(f).unwrap_or_default();
+                if let Some(d) = manifest["config"]["digest"].as_str() {
+                    verify_blob(root, d, &mut failures);
+                }
+                if let Some(layers) = manifest["layers"].as_array() {
+                    for layer in layers {
+                        if let Some(d) = layer["digest"].as_str() {
+                            verify_blob(root, d, &mut failures);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let passed = failures.is_empty();
+    Ok(VerifyResult { passed, failures })
+}
+
+fn verify_blob(root: &Path, digest: &str, failures: &mut Vec<String>) {
+    let bp = blob_path(root, digest);
+    match fs::read(&bp) {
+        Err(_) => failures.push(format!("{}: blob file missing", digest)),
+        Ok(data) => {
+            let actual = sha256_bytes(&data);
+            if actual != digest {
+                failures.push(format!("{}: digest mismatch (actual {})", digest, actual));
+            }
+        }
+    }
 }
 
 pub fn open_adpkg(path: &str) -> Result<Adp, Box<dyn std::error::Error>> {

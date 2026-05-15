@@ -4,6 +4,7 @@ import hashlib
 import json
 import tarfile
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, List
 
@@ -70,7 +71,12 @@ class ADPackage:
 
     @classmethod
     def create_from_directory(
-        cls, src: str | Path, out_path: str | Path
+        cls,
+        src: str | Path,
+        out_path: str | Path,
+        builder_id: str = "",
+        source_repo: str = "",
+        source_ref: str = "",
     ) -> "ADPackage":
         src_path = Path(src)
         out_dir = Path(out_path)
@@ -87,10 +93,15 @@ class ADPackage:
         blobs = out_dir / "blobs" / "sha256"
         blobs.mkdir(parents=True, exist_ok=True)
 
-        # Config blob (minimal metadata)
-        config_bytes = json.dumps(
-            {"agent_id": adp.id, "adp_version": adp.adp_version}
-        ).encode()
+        # Config blob with provenance fields
+        config_bytes = json.dumps({
+            "agent_id": adp.id,
+            "adp_version": adp.adp_version,
+            "builder.id": builder_id,
+            "source.repo": source_repo,
+            "source.ref": source_ref,
+            "build_timestamp": datetime.now(timezone.utc).isoformat(),
+        }).encode()
         config_digest, config_size = cls._hash_bytes(config_bytes)
         config_path = cls._blob_path(out_dir / "blobs", config_digest)
         config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -140,6 +151,45 @@ class ADPackage:
     @classmethod
     def open(cls, path: str | Path) -> "ADPackage":
         return cls(Path(path))
+
+    def inspect(self) -> dict:
+        """Return structured metadata: agent_id, adp_version, layer count, config blob contents."""
+        index = json.loads((self.path / "index.json").read_text())
+        manifest_desc = index["manifests"][0]
+        manifest_bytes = self._blob_path(self.path / "blobs", manifest_desc["digest"]).read_bytes()
+        manifest = json.loads(manifest_bytes)
+        config_bytes = self._blob_path(self.path / "blobs", manifest["config"]["digest"]).read_bytes()
+        config = json.loads(config_bytes)
+        return {
+            "agent_id": config.get("agent_id"),
+            "adp_version": config.get("adp_version"),
+            "layer_count": len(manifest.get("layers", [])),
+            "config": config,
+        }
+
+    def verify(self) -> dict:
+        """Recompute SHA-256 of each blob and compare to stored digest. Returns pass/fail + failures."""
+        failures: List[str] = []
+        index = json.loads((self.path / "index.json").read_text())
+        for entry in index.get("manifests", []):
+            self._verify_blob(entry["digest"], failures)
+            manifest = json.loads(self._blob_path(self.path / "blobs", entry["digest"]).read_bytes())
+            config_desc = manifest.get("config", {})
+            if config_desc.get("digest"):
+                self._verify_blob(config_desc["digest"], failures)
+            for layer in manifest.get("layers", []):
+                if layer.get("digest"):
+                    self._verify_blob(layer["digest"], failures)
+        return {"passed": len(failures) == 0, "failures": failures}
+
+    def _verify_blob(self, digest: str, failures: List[str]) -> None:
+        blob_path = self._blob_path(self.path / "blobs", digest)
+        if not blob_path.exists():
+            failures.append(f"{digest}: blob file missing")
+            return
+        actual_digest, _ = self._hash_bytes(blob_path.read_bytes())
+        if actual_digest != digest:
+            failures.append(f"{digest}: digest mismatch (actual {actual_digest})")
 
     def list_blobs(self) -> List[str]:
         return [p.name for p in (self.path / "blobs" / "sha256").glob("*")]

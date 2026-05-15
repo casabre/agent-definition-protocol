@@ -74,6 +74,8 @@ See [adpkg-oci.md](adpkg-oci.md) for complete verification procedures. Key steps
 
 ## Governance (Roadmap)
 
+> **Status: Roadmap — not yet normative.** The features below are planned for future ADP releases and are not required for v0.1.0 conformance. See [roadmap.md](../roadmap.md).
+
 The following governance features are planned for future ADP releases:
 
 ### Guardrails Schema

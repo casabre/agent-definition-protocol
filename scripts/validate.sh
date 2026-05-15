@@ -7,7 +7,7 @@ if [ -x "$SCRIPT_DIR/../.venv/bin/python" ]; then
   PYTHON_BIN="$SCRIPT_DIR/../.venv/bin/python"
 fi
 
-# Validate ADP, runtime, flow, evaluation, minimal, and sample manifests against schemas.
+# Validate ADP, runtime, flow, evaluation, ACS, and adpkg-metadata manifests against schemas.
 "$PYTHON_BIN" - <<'PY'
 import json
 import warnings
@@ -24,6 +24,8 @@ schemas = {
     "runtime": root / "schemas" / "runtime.schema.json",
     "flow": root / "schemas" / "flow.schema.json",
     "evaluation": root / "schemas" / "evaluation.schema.json",
+    "acs": root / "schemas" / "acs.schema.json",
+    "adpkg_metadata": root / "schemas" / "adpkg-metadata-v0.1.schema.json",
 }
 examples = {
     "adp": [
@@ -37,6 +39,8 @@ examples = {
     "runtime": [root / "examples" / "runtime" / "acme-runtime-example.yaml"],
     "flow": [root / "examples" / "flow" / "acme-flow-example.yaml", root / "samples" / "python" / "langgraph" / "flow.yaml"],
     "evaluation": [root / "examples" / "evaluation" / "acme-eval-suite.yaml"],
+    "acs": [root / "examples" / "acme-analytics" / "acs" / "container.yaml"],
+    "adpkg_metadata": [root / "fixtures" / "adpkg_metadata_minimal.yaml"],
 }
 negative = {
     "adp": [root / "fixtures" / "negative" / "invalid_adp_missing_runtime.yaml"],

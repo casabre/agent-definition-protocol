@@ -1,16 +1,17 @@
 package adpkg
 
 import (
-    "encoding/json"
-    "os"
-    "path/filepath"
-    "strings"
-
     "archive/tar"
     "crypto/sha256"
     "encoding/hex"
+    "encoding/json"
+    "fmt"
+    "os"
+    "path/filepath"
+    "strings"
+    "time"
 
-    "github.com/acme/adp-sdk/adp"
+    "github.com/casabre/adp-sdk/adp"
 )
 
 type ADPKG struct {
@@ -22,6 +23,10 @@ func OpenADPKG(path string) (*ADPKG, error) {
 }
 
 func CreateADPKG(srcDir, outPath string) error {
+    return CreateADPKGWithProvenance(srcDir, outPath, "", "", "")
+}
+
+func CreateADPKGWithProvenance(srcDir, outPath, builderID, sourceRepo, sourceRef string) error {
 	adpPath := filepath.Join(srcDir, "adp", "agent.yaml")
 	agent, err := adp.LoadADP(adpPath)
 	if err != nil {
@@ -35,8 +40,19 @@ func CreateADPKG(srcDir, outPath string) error {
 		return err
 	}
 
-	// Config blob
-	config := []byte(`{"agent_id":"` + agent.ID + `","adp_version":"` + agent.ADPVersion + `"}`)
+	// Config blob with provenance fields
+	configMap := map[string]string{
+		"agent_id":        agent.ID,
+		"adp_version":     agent.ADPVersion,
+		"builder.id":      builderID,
+		"source.repo":     sourceRepo,
+		"source.ref":      sourceRef,
+		"build_timestamp": time.Now().UTC().Format(time.RFC3339),
+	}
+	config, err := json.Marshal(configMap)
+	if err != nil {
+		return err
+	}
 	configDigest := sha256Bytes(config)
 	if err := writeBlob(outPath, configDigest, config); err != nil {
 		return err
@@ -106,6 +122,119 @@ func CreateADPKG(srcDir, outPath string) error {
 		return err
 	}
 	return nil
+}
+
+// InspectResult holds structured metadata from an ADPKG.
+type InspectResult struct {
+    AgentID    string                 `json:"agent_id"`
+    ADPVersion string                 `json:"adp_version"`
+    LayerCount int                    `json:"layer_count"`
+    Config     map[string]interface{} `json:"config"`
+}
+
+// VerifyResult holds the outcome of digest verification.
+type VerifyResult struct {
+    Passed   bool     `json:"passed"`
+    Failures []string `json:"failures"`
+}
+
+func blobPath(root, digest string) string {
+    parts := strings.Split(digest, ":")
+    return filepath.Join(root, "blobs", parts[0], parts[1])
+}
+
+// Inspect returns structured metadata from the package without extracting the layer.
+func Inspect(pkgDir string) (*InspectResult, error) {
+    indexBytes, err := os.ReadFile(filepath.Join(pkgDir, "index.json"))
+    if err != nil {
+        return nil, err
+    }
+    var index map[string]interface{}
+    if err := json.Unmarshal(indexBytes, &index); err != nil {
+        return nil, err
+    }
+    manifestDesc := index["manifests"].([]interface{})[0].(map[string]interface{})
+    manifestBytes, err := os.ReadFile(blobPath(pkgDir, manifestDesc["digest"].(string)))
+    if err != nil {
+        return nil, err
+    }
+    var manifest map[string]interface{}
+    if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+        return nil, err
+    }
+    configDigest := manifest["config"].(map[string]interface{})["digest"].(string)
+    configBytes, err := os.ReadFile(blobPath(pkgDir, configDigest))
+    if err != nil {
+        return nil, err
+    }
+    var config map[string]interface{}
+    if err := json.Unmarshal(configBytes, &config); err != nil {
+        return nil, err
+    }
+    layerCount := 0
+    if layers, ok := manifest["layers"].([]interface{}); ok {
+        layerCount = len(layers)
+    }
+    return &InspectResult{
+        AgentID:    fmt.Sprintf("%v", config["agent_id"]),
+        ADPVersion: fmt.Sprintf("%v", config["adp_version"]),
+        LayerCount: layerCount,
+        Config:     config,
+    }, nil
+}
+
+// Verify recomputes SHA-256 of each blob and compares it to the stored digest.
+func Verify(pkgDir string) (*VerifyResult, error) {
+    indexBytes, err := os.ReadFile(filepath.Join(pkgDir, "index.json"))
+    if err != nil {
+        return nil, err
+    }
+    var index map[string]interface{}
+    if err := json.Unmarshal(indexBytes, &index); err != nil {
+        return nil, err
+    }
+    var failures []string
+    manifests, _ := index["manifests"].([]interface{})
+    for _, entry := range manifests {
+        desc := entry.(map[string]interface{})
+        digest := desc["digest"].(string)
+        verifyBlob(pkgDir, digest, &failures)
+        manifestBytes, err := os.ReadFile(blobPath(pkgDir, digest))
+        if err != nil {
+            continue
+        }
+        var manifest map[string]interface{}
+        if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+            continue
+        }
+        if configDesc, ok := manifest["config"].(map[string]interface{}); ok {
+            if d, ok := configDesc["digest"].(string); ok {
+                verifyBlob(pkgDir, d, &failures)
+            }
+        }
+        if layers, ok := manifest["layers"].([]interface{}); ok {
+            for _, l := range layers {
+                if layer, ok := l.(map[string]interface{}); ok {
+                    if d, ok := layer["digest"].(string); ok {
+                        verifyBlob(pkgDir, d, &failures)
+                    }
+                }
+            }
+        }
+    }
+    return &VerifyResult{Passed: len(failures) == 0, Failures: failures}, nil
+}
+
+func verifyBlob(pkgDir, digest string, failures *[]string) {
+    data, err := os.ReadFile(blobPath(pkgDir, digest))
+    if err != nil {
+        *failures = append(*failures, digest+": blob file missing")
+        return
+    }
+    actual := sha256Bytes(data)
+    if actual != digest {
+        *failures = append(*failures, digest+": digest mismatch (actual "+actual+")")
+    }
 }
 
 func sha256Bytes(data []byte) string {

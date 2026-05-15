@@ -1,4 +1,4 @@
-acs_version: "0.1"
+acs_version: "0.1.0"
 base_image: "python:3.12-slim"
 
 build:

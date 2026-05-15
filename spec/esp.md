@@ -379,15 +379,195 @@ Runners MAY enforce stricter schemas or validation, but MUST accept state confor
 
 ## Flow Node Semantics
 
-[To be written - detailed semantics per node kind]
-- **input**: Receives external invocation, initializes state
-- **output**: Returns final result, terminates run
-- **llm**: Invokes LLM with model_ref and prompt_ref, updates context
-- **tool**: Invokes tool via tool_ref, updates tool_responses
-- **router**: Routes to next nodes based on strategy
-- **retriever**: Queries memory/vector store, updates context
-- **evaluator**: Runs evaluation metrics, updates context
-- **subflow**: Executes referenced subflow (future)
+This section is authoritative. Design decisions are recorded in `spec/decisions/esp-node-semantics.md`. If spec prose and that ADR disagree, fix the prose.
+
+### `input` node
+
+**Purpose**: Entry point for a run. Initializes state from the invocation payload.
+
+**State reads**: None (executes at run start).
+
+**State writes**:
+- `state.inputs` ← invocation payload verbatim. No sub-key is introduced; the entire payload object becomes `state.inputs`.
+- `state.context` ← initialized to `{}`.
+- `state.tool_responses` ← initialized to `{}`.
+- `state.memory` ← initialized to persisted memory if available, otherwise `{}`.
+
+**Error behavior**: If the invocation payload is absent or malformed, the runner MUST treat this as a permanent failure and halt the run before any node executes.
+
+**Example**:
+```yaml
+nodes:
+  - id: "start"
+    kind: "input"
+```
+Invocation `{"query": "What is the capital of France?"}` → `state.inputs = {"query": "What is the capital of France?"}`.
+
+---
+
+### `llm` node
+
+**Purpose**: Invokes a language model and writes the response to context.
+
+**State reads**: `state.inputs`, `state.context` (used to construct the prompt).
+
+**State writes**:
+- `state.context[node.id]` ← LLM response string (or structured object if the model returns structured output). The key is the node's `id` field — deterministic and collision-free.
+
+**Fields**:
+- `model_ref` (optional): References a model from `runtime.models[]` or the runner's model registry. Resolution follows `spec/esp.md §Model Reference Resolution`.
+- `system_prompt_ref` (optional): Dot-notation path to a system prompt. Resolution follows `spec/esp.md §Prompt Reference Resolution`.
+- `prompt_ref` (optional): Dot-notation path to a user prompt template.
+
+**Error behavior**: Resolution failures (`model_ref` or `prompt_ref` cannot be resolved) are permanent failures. LLM invocation failures are classified as transient (network, rate limit) or permanent (auth, invalid model) per `spec/esp.md §Error & Failure Semantics`.
+
+**Example**:
+```yaml
+nodes:
+  - id: "answer"
+    kind: "llm"
+    model_ref: "primary"
+    system_prompt_ref: "prompts.system"
+```
+After execution: `state.context["answer"] = "Paris."`.
+
+---
+
+### `tool` node
+
+**Purpose**: Invokes an external tool (MCP server, HTTP API, or SQL function) and records the response.
+
+**State reads**: `state.context`, `state.inputs` (for parameter extraction).
+
+**State writes**:
+- `state.tool_responses[node.id]` ← append `{"params": <invocation params>, "response": <tool output>}`. The array is **never replaced** — each invocation adds a new entry. This preserves the full invocation history within the run.
+
+**Fields**:
+- `tool_ref` (required for ESP conformance): References a tool ID from `tools.mcp_servers[]`, `tools.http_apis[]`, or `tools.sql_functions[]`. Resolution follows `spec/esp.md §Tool Binding Semantics`.
+
+**Error behavior**: Tool invocation failures follow `spec/esp.md §Tool Invocation Failures`. Resolution failure is a permanent failure.
+
+**Example**:
+```yaml
+nodes:
+  - id: "fetch-data"
+    kind: "tool"
+    tool_ref: "metrics-api"
+```
+After execution: `state.tool_responses["fetch-data"] = [{"params": {...}, "response": {...}}]`.
+
+---
+
+### `router` node
+
+**Purpose**: Activates outgoing edges based on a routing strategy.
+
+**State reads**: `state.context` (for condition evaluation).
+
+**State writes**: None. The router does not modify state; it determines which edges are traversed.
+
+**Fields**:
+- `strategy` (required): One of `sequence`, `conditional`, `parallel`.
+  - `sequence`: Activate outgoing edges one at a time in declaration order. Wait for each path to complete before activating the next.
+  - `conditional`: Evaluate each outgoing edge's `condition` against current state. Activate all edges whose conditions evaluate to `true`. If no edges match, the router fails permanently.
+  - `parallel`: Activate all outgoing edges simultaneously. Subject to observable ordering constraints.
+
+**Error behavior**: If `strategy` is `conditional` and no outgoing edge condition evaluates to `true`, this is a permanent failure. Runners MUST NOT silently skip routing.
+
+**Example**:
+```yaml
+nodes:
+  - id: "route"
+    kind: "router"
+    strategy: "conditional"
+edges:
+  - { from: "route", to: "fast-path", condition: "$.context.score > 0.8" }
+  - { from: "route", to: "slow-path", condition: "$.context.score <= 0.8" }
+```
+
+---
+
+### `retriever` node
+
+**Purpose**: Queries a memory or vector store and writes retrieved content to context.
+
+**State reads**: `state.context`, `state.memory`.
+
+**State writes**:
+- `state.context[node.id]` ← retrieved content (array of results or structured object). The key is the node's `id` field, following the same pattern as `llm` nodes.
+
+**Fields**:
+- `memory_ref` (optional): Names the memory provider to query. The runner resolves `memory_ref` against `adp.memory.provider` first, then a runner-provided registry. If absent, the runner uses the default memory provider configured for the run.
+
+**Error behavior**: If `memory_ref` cannot be resolved and no default provider exists, this is a permanent failure. Empty results (no documents found) are not failures — the runner writes an empty array to `state.context[node.id]`.
+
+**Example**:
+```yaml
+nodes:
+  - id: "retrieve-context"
+    kind: "retriever"
+    memory_ref: "vector-store"
+```
+After execution: `state.context["retrieve-context"] = [{"text": "...", "score": 0.92}]`.
+
+---
+
+### `evaluator` node
+
+**Purpose**: Runs an evaluation suite against the current state and writes a pass/fail result.
+
+**State reads**: `state.context`, `state.inputs` (evaluation targets are drawn from context).
+
+**State writes**:
+- `state.context[node.id]` ← `{"passed": <bool>, "score": <number 0.0–1.0>}`.
+
+**Fields**:
+- `suite_ref` (required): References an evaluation suite by ID, matching `evaluation.suites[].id`. The runner executes all metrics in the referenced suite.
+- `blocking` (optional, default `false`): If `true`, a failing evaluation (i.e., `passed: false`) halts the flow as a permanent failure. If `false`, the result is written to context and the flow continues regardless of outcome.
+
+**Error behavior**: If `suite_ref` cannot be resolved, this is a permanent failure. If evaluation metrics themselves fail (e.g., LLM judge call fails), the runner MAY treat this as transient or permanent per its retry policy.
+
+**Example**:
+```yaml
+nodes:
+  - id: "check-quality"
+    kind: "evaluator"
+    suite_ref: "groundedness"
+    blocking: true
+```
+After execution: `state.context["check-quality"] = {"passed": true, "score": 0.91}`. If `blocking: true` and `passed: false`, the run halts.
+
+---
+
+### `output` node
+
+**Purpose**: Terminal node. Collects the final result from context and returns it to the caller.
+
+**State reads**: `state.context[output_ref]` if `output_ref` is set; otherwise the last key written to `state.context` during the run.
+
+**State writes**: None. The `output` node does not modify state.
+
+**Fields**:
+- `output_ref` (optional): Names the `context` key to return as the run result. If absent, the runner uses the last key written to `state.context` as the fallback. Runners SHOULD document their last-written-key resolution behavior.
+
+**Error behavior**: If `output_ref` is set but the named key is absent from `state.context`, this is a permanent failure.
+
+**Example**:
+```yaml
+nodes:
+  - id: "done"
+    kind: "output"
+    output_ref: "answer"
+```
+Run result ← `state.context["answer"]`.
+
+---
+
+### `subflow` node
+
+> **Status**: Deferred to v0.2.0. Subflow node semantics are not specified in v0.1.0.
+>
+> The `subflow` kind is accepted by the schema to allow forward-compatible manifests, but runners SHOULD reject subflow nodes with a clear error rather than silently ignoring them until the semantics are finalized.
 
 ## Tool Binding Semantics
 
@@ -832,23 +1012,40 @@ Future versions MAY introduce:
 
 ## Optional Runner Capabilities
 
-[To be written - advanced features]
-- Parallel node execution
-- Streaming responses
-- Checkpointing and resumption
-- Advanced retry policies
-- Custom scheduling strategies
+> **Status**: Deferred to v0.2.0. The following capabilities are noted for planning purposes but their semantics are not normative in v0.1.0.
+
+Runners MAY implement the following capabilities beyond the required ESP semantics:
+
+- **Parallel node execution**: Concurrent execution of ready nodes, subject to observable ordering.
+- **Streaming responses**: LLM token-by-token streaming; tool response chunking.
+- **Checkpointing and resumption**: Persisting run state at node boundaries to allow resumption after failure.
+- **Advanced retry policies**: Per-node retry configuration; circuit breakers; dead-letter handling.
+- **Custom scheduling strategies**: Priority queues, fairness policies, resource-aware scheduling.
+
+Runners implementing any of these capabilities MUST document them and MUST NOT violate core ESP semantics (observable ordering, state consistency, termination).
 
 ## Conformance Requirements
 
-[To be written in Task 8]
-- ESP-conformant runners MUST:
-  - Correctly interpret flow.graph according to ESP
-  - Implement state model semantics
-  - Implement tool binding semantics
-  - Implement model/prompt resolution semantics
-- Concrete conformance scenarios
-- Testable requirements
+An **ESP-conformant runner** MUST implement all of the following:
+
+1. **Flow graph execution**: Correctly traverse `flow.graph` per `spec/esp.md §Execution Model Overview` — node readiness, edge traversal, edge condition evaluation, termination conditions.
+
+2. **State model**: Initialize, pass, and update state with `inputs`, `context`, `memory`, and `tool_responses` as specified in `spec/esp.md §State Model`.
+
+3. **Per-node semantics**: Implement each node kind's state reads and writes as specified in `spec/esp.md §Flow Node Semantics`. For `subflow`, the runner MUST reject the node with a clear error (deferred).
+
+4. **Tool binding**: Resolve `tool_ref` to a tool definition and invoke it per `spec/esp.md §Tool Binding Semantics`.
+
+5. **Model and prompt resolution**: Resolve `model_ref` and `prompt_ref` per `spec/esp.md §Model & Prompt Resolution`.
+
+6. **Error semantics**: Distinguish permanent from transient failures; propagate errors per `spec/esp.md §Error & Failure Semantics`.
+
+7. **Observable ordering**: Preserve observable ordering of node executions and state updates even under parallel or async execution.
+
+**Testable checkpoints** (see `spec/conformance.md` for the full conformance fixture suite):
+- A runner that passes a valid ADP-Minimal manifest through all 7 in-scope node kinds without error is a candidate for ESP conformance.
+- A runner that violates observable ordering or drops state fields fails ESP conformance.
+- A runner that silently accepts `subflow` nodes without erroring fails ESP conformance until v0.2.0 semantics are published.
 
 ## Backward Compatibility
 

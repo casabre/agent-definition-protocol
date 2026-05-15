@@ -30,11 +30,11 @@ This document describes the canonical packaging for ADP v0.1.0 using the OCI ima
 
 The following requirements apply to implementations that build packaging or verification tooling; ADP is a specification and format, not a tool.
 
-- **Signatures**: MUST use Notary v2 for manifest signatures; signatures MUST cover the ADP package layer and config.
-- **SBOM**: MUST include an SPDX JSON SBOM as an OCI referrer or additional layer with media type `application/vnd.adp.sbom.v1+json`.
-- **Build metadata**: Config MUST include builder id, source repo URL, ref, and build timestamp; these SHOULD also appear as OCI annotations.
+- **Signatures**: Implementations SHOULD sign ADPKG manifests using Notary v2; signatures SHOULD cover the ADP package layer and config. Reference tooling for signing is planned for v0.2.0.
+- **SBOM**: Implementations SHOULD include an SPDX JSON SBOM as an OCI referrer or additional layer with media type `application/vnd.adp.sbom.v1+json`. Reference tooling for SBOM generation is planned for v0.2.0.
+- **Build metadata**: Config MUST include builder id, source repo URL, ref, and build timestamp; these SHOULD also appear as OCI annotations. Tools listed as SHOULD are strongly recommended for ADP-Full conformance.
 - **Trust policy**: Registries/consumers SHOULD define a trust policy to require signatures from approved identities and a valid SBOM; an example trust policy SHOULD be published with the implementation.
-- **Verification**: Implementations SHOULD expose a `verify` command to fetch signatures and SBOM referrers and fail closed when missing.
+- **Verification**: Implementations SHOULD expose a `verify` command to check digest integrity; Notary v2 signature verification is planned for v0.2.0.
 
 ## Verification
 

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.com/schemas/flow.schema.json",
-  "title": "AFG Flow v0.2",
+  "$id": "https://casabre.github.io/agent-definition-protocol/schemas/flow.schema.json",
+  "title": "AFG Flow v0.1",
   "type": "object",
   "required": ["id", "graph"],
   "properties": {
@@ -71,7 +71,15 @@
         "system_prompt_ref": {"type": "string"},
         "prompt_ref": {"type": "string"},
         "tool_ref": {"type": "string", "description": "References a tool ID from tools.* arrays (v0.2.0+)"},
-        "strategy": {"type": "string"},
+        "memory_ref": {"type": "string", "description": "Names the memory provider for retriever nodes"},
+        "suite_ref": {"type": "string", "description": "References an evaluation suite ID for evaluator nodes"},
+        "output_ref": {"type": "string", "description": "Names the context key to return as the run result for output nodes"},
+        "blocking": {"type": "boolean", "description": "If true, a failing evaluator node halts the flow (default: false)"},
+        "strategy": {
+          "type": "string",
+          "enum": ["sequence", "conditional", "parallel"],
+          "description": "Routing strategy for router nodes"
+        },
         "params": {"type": "object", "additionalProperties": true},
         "ui": {"$ref": "#/definitions/ui"},
         "extensions": {"type": "object", "additionalProperties": true}

@@ -1,10 +1,12 @@
 import fs from "fs";
 import path from "path";
-import Ajv from "ajv";
+import Ajv2020 from "ajv/dist/2020.js";
+import addFormats from "ajv-formats";
 import yaml from "js-yaml";
 import { fileURLToPath } from "url";
 
-const ajv = new Ajv({ allErrors: true, strict: false, validateSchema: false });
+const ajv = new Ajv2020({ allErrors: true, allowUnionTypes: true });
+addFormats(ajv);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 function loadSchema(name: string) {

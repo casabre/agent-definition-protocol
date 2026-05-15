@@ -6,6 +6,30 @@ import (
 	"testing"
 )
 
+func minimalFlow() interface{} {
+	return map[string]interface{}{
+		"id": "f",
+		"graph": map[string]interface{}{
+			"nodes":       []interface{}{map[string]interface{}{"id": "n", "kind": "input"}},
+			"edges":       []interface{}{},
+			"start_nodes": []interface{}{"n"},
+			"end_nodes":   []interface{}{"n"},
+		},
+	}
+}
+
+func minimalEvaluation() interface{} {
+	return map[string]interface{}{
+		"suites": []interface{}{map[string]interface{}{
+			"id": "s",
+			"metrics": []interface{}{map[string]interface{}{
+				"id": "m", "type": "deterministic", "function": "noop",
+				"scoring": "boolean", "threshold": true,
+			}},
+		}},
+	}
+}
+
 func writeAgent(dir, content string) string {
 	os.MkdirAll(filepath.Join(dir, "adp"), 0o755)
 	path := filepath.Join(dir, "adp", "agent.yaml")
@@ -23,8 +47,24 @@ runtime:
     - backend: python
       id: py
       entrypoint: main:app
-flow: {}
-evaluation: {}
+flow:
+  id: "f"
+  graph:
+    nodes:
+      - id: "n"
+        kind: "input"
+    edges: []
+    start_nodes: ["n"]
+    end_nodes: ["n"]
+evaluation:
+  suites:
+    - id: "s"
+      metrics:
+        - id: "m"
+          type: "deterministic"
+          function: "noop"
+          scoring: "boolean"
+          threshold: true
 `)
 	adp, err := LoadADP(path)
 	if err != nil {
@@ -57,13 +97,13 @@ func TestValidateADP(t *testing.T) {
 		ADPVersion: "0.1.0",
 		ID:         "ok",
 		Runtime:    Runtime{Execution: []RuntimeEntry{{Backend: "python", ID: "py", Entrypoint: "main:app"}}},
-		Flow:       map[string]interface{}{},
-		Evaluation: map[string]interface{}{},
+		Flow:       minimalFlow(),
+		Evaluation: minimalEvaluation(),
 	}
 	if err := ValidateADP(valid); err != nil {
 		t.Fatalf("unexpected validation error: %v", err)
 	}
-	
+
 	invalid := &ADP{ADPVersion: "0.0.1", Runtime: Runtime{Execution: []RuntimeEntry{}}}
 	if err := ValidateADP(invalid); err == nil {
 		t.Fatal("expected validation error")
@@ -88,18 +128,11 @@ func TestValidateADPEmptyID(t *testing.T) {
 		ADPVersion: "0.1.0",
 		ID:         "",
 		Runtime:    Runtime{Execution: []RuntimeEntry{{Backend: "python", ID: "py", Entrypoint: "main:app"}}},
-		Flow:       map[string]interface{}{},
-		Evaluation: map[string]interface{}{},
 	}
-	// Note: Current Go validation may not check empty ID - schema validation handles this
-	// This test verifies the structure is valid even if validation doesn't catch empty ID
 	err := ValidateADP(adp)
-	if err != nil {
-		// Validation caught it - good
-		return
+	if err == nil {
+		t.Fatal("expected validation error for empty id")
 	}
-	// If validation passes, that's acceptable - schema validation will catch it at runtime
-	t.Logf("Note: Validation did not reject empty ID (schema validation will catch it)")
 }
 
 func TestValidateADPInvalidVersion(t *testing.T) {
@@ -119,22 +152,17 @@ func TestValidateADPV0_1_0(t *testing.T) {
 	adp := &ADP{
 		ADPVersion: "0.1.0",
 		ID:         "agent.v0.1.0",
-		Runtime: Runtime{
-			Execution: []RuntimeEntry{{Backend: "python", ID: "py", Entrypoint: "main:app"}},
-		},
+		Runtime:    Runtime{Execution: []RuntimeEntry{{Backend: "python", ID: "py", Entrypoint: "main:app"}}},
 		Flow: map[string]interface{}{
 			"id": "test.flow",
 			"graph": map[string]interface{}{
-				"nodes": []map[string]interface{}{
-					{"id": "input", "kind": "input"},
-					{"id": "output", "kind": "output"},
-				},
-				"edges": []interface{}{},
-				"start_nodes": []string{"input"},
-				"end_nodes": []string{"output"},
+				"nodes":       []interface{}{map[string]interface{}{"id": "input", "kind": "input"}, map[string]interface{}{"id": "output", "kind": "output"}},
+				"edges":       []interface{}{},
+				"start_nodes": []interface{}{"input"},
+				"end_nodes":   []interface{}{"output"},
 			},
 		},
-		Evaluation: map[string]interface{}{},
+		Evaluation: minimalEvaluation(),
 	}
 	if err := ValidateADP(adp); err != nil {
 		t.Fatalf("unexpected validation error for v0.1.0: %v", err)
@@ -146,12 +174,12 @@ func TestValidateADPMultipleBackends(t *testing.T) {
 		ADPVersion: "0.1.0",
 		ID:         "multi",
 		Runtime: Runtime{Execution: []RuntimeEntry{
-			{Backend: "docker", ID: "docker"},
+			{Backend: "docker", ID: "docker", Image: "registry/img:latest"},
 			{Backend: "python", ID: "python", Entrypoint: "main:app"},
-			{Backend: "wasm", ID: "wasm"},
+			{Backend: "wasm", ID: "wasm", Module: "agent.wasm"},
 		}},
-		Flow:       map[string]interface{}{},
-		Evaluation: map[string]interface{}{},
+		Flow:       minimalFlow(),
+		Evaluation: minimalEvaluation(),
 	}
 	if err := ValidateADP(adp); err != nil {
 		t.Fatalf("unexpected validation error: %v", err)
@@ -177,14 +205,16 @@ func TestValidateADPDifferentBackends(t *testing.T) {
 }
 
 func TestValidateADPWithOptionalFields(t *testing.T) {
-	// Note: Go SDK doesn't currently expose Name/Description fields in ADP struct
-	// This test validates that optional fields don't break validation
 	adp := &ADP{
-		ADPVersion: "0.1.0",
-		ID:         "full",
-		Runtime:    Runtime{Execution: []RuntimeEntry{{Backend: "python", ID: "py", Entrypoint: "main:app"}}},
-		Flow:       map[string]interface{}{},
-		Evaluation: map[string]interface{}{},
+		ADPVersion:  "0.1.0",
+		ID:          "full",
+		Name:        "Full Agent",
+		Description: "Test agent with all optional fields",
+		Owner:       "test-team",
+		Tags:        []string{"test", "demo"},
+		Runtime:     Runtime{Execution: []RuntimeEntry{{Backend: "python", ID: "py", Entrypoint: "main:app"}}},
+		Flow:        minimalFlow(),
+		Evaluation:  minimalEvaluation(),
 	}
 	if err := ValidateADP(adp); err != nil {
 		t.Fatalf("unexpected validation error: %v", err)

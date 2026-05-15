@@ -15,10 +15,11 @@ This appendix maps ADP concepts to adjacent specifications to ease integration.
 - **Cost/tool usage**: `tool.calls`, `llm.tokens` SHOULD map to custom OTel metrics with clear units (tokens, USD).
 - **Namespaces**: Use OTel attributes for `agent.id`, `deployment.environment`, and `runtime.backend.id` to correlate telemetry with ADP definitions.
 
-## Required minimums (ADP-Full)
-- A2A: If `interop.a2a.ref` is provided, it MUST resolve to a valid AgentCard; ids SHOULD match. Inline `interop.a2a.agentcard` SHOULD include identity and runtime refs.
-- OTel: Telemetry metrics SHOULD include attributes `agent.id`, `deployment.environment`, and `runtime.backend.id` to correlate traces/metrics with ADP runtime entries.
-- HTTP/MCP/SQL tools SHOULD surface endpoints/connection info as OTel resource attributes where applicable.
-- Traces SHOULD include `flow.id` and `flow.node.id` span attributes for flow execution observability.
+## Recommended practices (informative)
 
-Status: Informative for mappings; required minimums above apply to ADP-Full implementations.
+These are guidance for implementers, not normative requirements:
+
+- A2A: If `interop.a2a.ref` is provided, implementers are encouraged to ensure it resolves to a valid AgentCard and that ids match. Inline `interop.a2a.agentcard` is encouraged to include identity and runtime refs.
+- OTel: Implementers are encouraged to include `agent.id`, `deployment.environment`, and `runtime.backend.id` as OTel attributes to correlate traces with ADP runtime entries.
+- HTTP/MCP/SQL tools: Implementers are encouraged to surface endpoint and connection info as OTel resource attributes where applicable.
+- Traces: Implementers are encouraged to include `flow.id` and `flow.node.id` span attributes for flow execution observability.

@@ -8,13 +8,43 @@ import (
 	"testing"
 )
 
+const validAgentYAML = `adp_version: "0.1.0"
+id: "agent.test"
+runtime:
+  execution:
+    - backend: "python"
+      id: "py"
+      entrypoint: "agent.main:app"
+flow:
+  id: "flow.test"
+  graph:
+    nodes:
+      - id: "start"
+        kind: "input"
+      - id: "done"
+        kind: "output"
+    edges:
+      - from: "start"
+        to: "done"
+    start_nodes: ["start"]
+    end_nodes: ["done"]
+evaluation:
+  suites:
+    - id: "basic"
+      metrics:
+        - id: "m1"
+          type: "deterministic"
+          function: "noop"
+          scoring: "boolean"
+          threshold: true
+`
+
 func buildSource(dir string) error {
 	adpDir := filepath.Join(dir, "adp")
 	if err := os.MkdirAll(adpDir, 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(adpDir, "agent.yaml"), []byte(
-		"adp_version: \"0.1.0\"\nid: \"agent.test\"\nruntime:\n  execution:\n    - backend: \"python\"\n      id: \"py\"\n      entrypoint: \"agent.main:app\"\nflow: {}\nevaluation: {}\n"), 0o644)
+	return os.WriteFile(filepath.Join(adpDir, "agent.yaml"), []byte(validAgentYAML), 0o644)
 }
 
 func buildSourceWithMetadata(dir string) error {
@@ -264,8 +294,7 @@ func TestCreateADPKGErrorPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Write valid ADP
-	if err := os.WriteFile(filepath.Join(badSrcDir, "adp", "agent.yaml"), []byte(
-		"adp_version: \"0.1.0\"\nid: \"test\"\nruntime:\n  execution:\n    - backend: \"python\"\n      id: \"py\"\n      entrypoint: \"main:app\"\nflow: {}\nevaluation: {}\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(badSrcDir, "adp", "agent.yaml"), []byte(validAgentYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	// Create a file that can't be read to trigger createTar error
@@ -471,7 +500,15 @@ flow:
     edges: []
     start_nodes: ["input"]
     end_nodes: ["output"]
-evaluation: {}
+evaluation:
+  suites:
+    - id: "basic"
+      metrics:
+        - id: "m1"
+          type: "deterministic"
+          function: "noop"
+          scoring: "boolean"
+          threshold: true
 `
 	if err := os.WriteFile(filepath.Join(adpDir, "agent.yaml"), []byte(v0_1_0_yaml), 0o644); err != nil {
 		t.Fatal(err)

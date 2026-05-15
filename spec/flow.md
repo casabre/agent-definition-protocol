@@ -20,5 +20,7 @@ Flows describe how an agent routes work across nodes. A flow is a directed graph
 ## Node kinds
 `input`, `output`, `llm`, `tool`, `router`, `retriever`, `evaluator`, `subflow`.
 
+For per-node execution semantics (what each node reads from and writes to state), see [esp.md §Flow Node Semantics](esp.md#flow-node-semantics).
+
 ## ACME flow example
 `examples/flow/acme-flow-example.yaml` shows the ACME Analytics Flow (planner → executor → synthesizer) with UI hints.

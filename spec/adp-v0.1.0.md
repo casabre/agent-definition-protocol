@@ -178,6 +178,8 @@ governance:
   guardrail_policy_set: "policies/acme-guardrails.yaml"
 ```
 
+A top-level `guardrails` field (distinct from `governance.guardrail_policy_set`) is accepted by the schema and MAY be used to reference external policy lists. Its formal specification and enforcement semantics are planned for v0.2.0. Implementations SHOULD ignore unrecognised `guardrails` sub-fields.
+
 ### Deployment
 
 Deployment defines environment targets. Deployment in ADP is descriptive (targets and endpoints); it does not define a deployment protocol or tool.

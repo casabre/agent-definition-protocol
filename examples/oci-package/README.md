@@ -172,13 +172,15 @@ cat blobs/sha256/$MANIFEST_DIGEST | jq '.annotations'
 ```python
 from adp_sdk.adpkg import ADPackage
 
-# Open and validate OCI package
+# Open an existing OCI package
 pkg = ADPackage.open("oci-package")
-adp = pkg.load_adp()
 
-# Verify structure
-assert pkg.has_adp_manifest()
-assert pkg.has_metadata()
+# Read the ADP manifest from the package layer
+adp = pkg.read_adp()
+print(adp.id, adp.adp_version)
+
+# List all blob digests in the package
+blobs = pkg.list_blobs()
 ```
 
 ### TypeScript SDK
@@ -186,12 +188,9 @@ assert pkg.has_metadata()
 ```typescript
 import { openPackage } from "./dist";
 
-const pkg = await openPackage("oci-package");
-const adp = await pkg.loadADP();
-
-// Verify structure
-console.assert(pkg.hasADPManifest());
-console.assert(pkg.hasMetadata());
+// Opens the package and returns the parsed ADP object
+const adp = openPackage("oci-package");
+console.log(adp.id, adp.adp_version);
 ```
 
 ## Creating an OCI Package
@@ -207,11 +206,18 @@ Example (Python):
 ```python
 from adp_sdk.adpkg import ADPackage
 
-# Create OCI package from directory
+# Create OCI package from agent directory
 pkg = ADPackage.create_from_directory(
-    source_dir="examples/acme-analytics",
-    output_dir="examples/oci-package"
+    src="examples/acme-analytics",
+    out_path="examples/oci-package"
 )
+```
+
+Example (TypeScript):
+```typescript
+import { createPackage } from "./dist";
+
+createPackage("examples/acme-analytics", "examples/oci-package");
 ```
 
 ## Notes

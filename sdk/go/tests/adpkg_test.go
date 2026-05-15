@@ -10,8 +10,8 @@ import (
 	"testing"
 	"strings"
 
-	sdkadp "github.com/acme/adp-sdk/adp"
-	"github.com/acme/adp-sdk/adpkg"
+	sdkadp "github.com/casabre/adp-sdk/adp"
+	"github.com/casabre/adp-sdk/adpkg"
 )
 
 func buildSource(dir string) {
@@ -23,7 +23,19 @@ runtime:
     - backend: "python"
       id: "py"
       entrypoint: "agent.main:app"
-flow: {}
+flow:
+  id: "flow.test"
+  graph:
+    nodes:
+      - id: "start"
+        kind: "input"
+      - id: "done"
+        kind: "output"
+    edges:
+      - from: "start"
+        to: "done"
+    start_nodes: ["start"]
+    end_nodes: ["done"]
 evaluation:
   suites:
     - id: "s"
@@ -32,7 +44,7 @@ evaluation:
           type: "deterministic"
           function: "noop"
           scoring: "boolean"
-          threshold: "true"
+          threshold: true
 `
 	os.WriteFile(filepath.Join(dir, "adp", "agent.yaml"), []byte(content), 0o644)
 }
@@ -154,10 +166,47 @@ func TestConfigDigestMatches(t *testing.T) {
 	if err := adpkg.CreateADPKG(tmp, out); err != nil {
 		t.Fatal(err)
 	}
-	cfg := `{"agent_id":"agent.test","adp_version":"0.1.0"}`
-	sum := sha256.Sum256([]byte(cfg))
-	expected := "sha256:" + hex.EncodeToString(sum[:])
-	if _, err := os.Stat(blobPath(out, expected)); err != nil {
-		t.Fatalf("expected config blob %s: %v", expected, err)
+	// Find the config digest from index.json -> manifest -> config
+	indexBytes, err := os.ReadFile(filepath.Join(out, "index.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var index map[string]interface{}
+	if err := json.Unmarshal(indexBytes, &index); err != nil {
+		t.Fatal(err)
+	}
+	manifestDigest := index["manifests"].([]interface{})[0].(map[string]interface{})["digest"].(string)
+	manifestBytes, err := os.ReadFile(blobPath(out, manifestDigest))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest map[string]interface{}
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		t.Fatal(err)
+	}
+	configDigest := manifest["config"].(map[string]interface{})["digest"].(string)
+	configBlob, err := os.ReadFile(blobPath(out, configDigest))
+	if err != nil {
+		t.Fatalf("config blob %s missing: %v", configDigest, err)
+	}
+	// Verify config blob contains required provenance fields
+	var configObj map[string]interface{}
+	if err := json.Unmarshal(configBlob, &configObj); err != nil {
+		t.Fatalf("config blob is not valid JSON: %v", err)
+	}
+	if configObj["agent_id"] != "agent.test" {
+		t.Errorf("expected agent_id 'agent.test', got '%v'", configObj["agent_id"])
+	}
+	if configObj["adp_version"] != "0.1.0" {
+		t.Errorf("expected adp_version '0.1.0', got '%v'", configObj["adp_version"])
+	}
+	if _, ok := configObj["build_timestamp"]; !ok {
+		t.Error("config blob missing build_timestamp field")
+	}
+	// Verify the actual digest matches what was written
+	sum := sha256.Sum256(configBlob)
+	recomputed := "sha256:" + hex.EncodeToString(sum[:])
+	if recomputed != configDigest {
+		t.Errorf("config digest mismatch: manifest says %s but blob hashes to %s", configDigest, recomputed)
 	}
 }

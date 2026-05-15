@@ -26,6 +26,14 @@ Evaluations attach quality and operational checks to agents. A suite is a set of
 - `scoring`: `{ combine, weights }`
 - `promotion_threshold`: minimum composite score to pass
 
+## Promotion policy
+
+`promotion_policy` is an optional top-level field on the `evaluation` block (not per-suite).
+
+- `require_passing_suites`: array of suite IDs that must pass before the agent is eligible for promotion. A suite "passes" when all its metrics meet their thresholds.
+
+`blocking` (halt flow on failure) is deferred to v0.2.0.
+
 ## Metric/KPI conventions
 - Metric ids SHOULD come from a controlled vocabulary: `latency.p95_ms`, `groundedness.score`, `cost.usd`, `tool.success_rate`.
 - `threshold` SHOULD be numeric for quantitative metrics; boolean is allowed only for deterministic pass/fail checks.

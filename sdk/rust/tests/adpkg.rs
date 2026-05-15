@@ -14,8 +14,28 @@ runtime:
     - backend: "python"
       id: "py"
       entrypoint: "agent.main:app"
-flow: {}
-evaluation: {}
+flow:
+  id: "flow.test"
+  graph:
+    nodes:
+      - id: "start"
+        kind: "input"
+      - id: "done"
+        kind: "output"
+    edges:
+      - from: "start"
+        to: "done"
+    start_nodes: ["start"]
+    end_nodes: ["done"]
+evaluation:
+  suites:
+    - id: "basic"
+      metrics:
+        - id: "m1"
+          type: "deterministic"
+          function: "noop"
+          scoring: "boolean"
+          threshold: true
 "#,
     )
     .unwrap();
@@ -248,7 +268,15 @@ flow:
     edges: []
     start_nodes: ["input"]
     end_nodes: ["output"]
-evaluation: {}
+evaluation:
+  suites:
+    - id: "basic"
+      metrics:
+        - id: "m1"
+          type: "deterministic"
+          function: "noop"
+          scoring: "boolean"
+          threshold: true
 "#,
     ).unwrap();
     

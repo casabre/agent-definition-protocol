@@ -13,6 +13,11 @@ function buildSource(tmp: string) {
   );
 }
 
+function testValidateRejectsInvalidFlow() {
+  const errors = validateAdp({ adp_version: "0.1.0", id: "x", runtime: { execution: [{ backend: "python", id: "p", entrypoint: "a:b" }] }, flow: {}, evaluation: { suites: [] } } as any);
+  assert.ok(errors.length > 0, "empty flow object must produce validation errors");
+}
+
 function testValidate() {
   const adp = {
     adp_version: "0.1.0",
@@ -45,6 +50,7 @@ function testPackage() {
 }
 
 (function run() {
+  testValidateRejectsInvalidFlow();
   testValidate();
   testPackage();
   console.log("ts tests passed");

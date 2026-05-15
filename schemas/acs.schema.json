@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.com/schemas/acs.schema.json",
-  "title": "Agent Container Spec v0.1",
+  "$id": "https://casabre.github.io/agent-definition-protocol/schemas/acs.schema.json",
+  "title": "Agent Container Spec v0.1.0",
   "type": "object",
   "required": ["acs_version", "base_image", "build", "runtime"],
   "properties": {
-    "acs_version": {"type": "string", "const": "0.1"},
+    "acs_version": {"type": "string", "const": "0.1.0"},
     "base_image": {"type": "string"},
     "build": {
       "type": "object",
