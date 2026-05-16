@@ -134,6 +134,15 @@ def check_adr_rules(scenarios: list[dict]) -> list[str]:
                     f"[D4] router scenario '{sid}': manifest_fragment.flow.graph.edges "
                     f"must include at least one conditional edge"
                 )
+            router_node_id = _find_node_id_by_kind(s, "router")
+            for t in transitions:
+                if t.get("after_node") == router_node_id:
+                    context = t.get("state", {}).get("context", {})
+                    if router_node_id in context:
+                        errors.append(
+                            f"[D4] router scenario '{sid}': state.context must NOT "
+                            f"contain router node id '{router_node_id}' — router writes no state"
+                        )
 
         elif kind == "retriever":
             retriever_node_id = _find_node_id_by_kind(s, "retriever")

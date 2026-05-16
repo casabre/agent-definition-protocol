@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [0.1.2] - 2026-05-16
+
+### Fixed
+- `spec/esp.md` §Edge Condition Evaluation: replaced JSONPath examples with the normative bare-dot `<key> <op> <value>` format defined in `spec/runtime-flow-binding.md §Condition Expression Format` (format conflict with `runtime-flow-binding.md` resolved)
+- `spec/esp.md` §`output` node: clarified `output_ref` as a dot-path from state root (e.g. `context.chat-llm.content` → `state["context"]["chat-llm"]["content"]`), consistent with condition expression key paths
+- `spec/esp.md` §`router` node example: updated condition strings from JSONPath to bare-dot format
+- `scripts/esp-conformance-fixtures.yaml` router-conditional scenario: router was incorrectly shown writing `state.context["decide"]`; redesigned to read from `inputs.decision` (conditions: `inputs.decision == approved`/`rejected`); `after_node: decide` state now correctly shows `context: {}` — router writes no state (D4 invariant)
+- `scripts/esp-runner-harness.py` D4 check: added invariant that `state.context` must NOT contain the router node ID after the router fires
+
+### Added
+- `fixtures/semantic/sem_neg_runtime_ref.yaml` — negative fixture for `runtime_ref` referencing a nonexistent `runtime.execution` entry
+- `runtime_ref` negative test in all 4 SDK test suites (Python, TypeScript, Rust, Go)
+
 ## [0.1.1] - 2026-05-16
 
 ### Added

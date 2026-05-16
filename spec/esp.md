@@ -205,12 +205,12 @@ Edges MAY have a `condition` field (string expression). When an edge is evaluate
 4. If the condition evaluates to `true`, the edge is traversable
 5. If the condition evaluates to `false`, the edge is not traversed
 
-**Condition expression language**: ESP RECOMMENDS JSONPath expressions (RFC 9535 subset) for edge conditions:
-- `$.context.status == "ready"` (string comparison)
-- `$.context.count > 10` (numeric comparison)
-- `$.inputs.user_id` (field access)
+**Condition expression language**: ESP uses a simple `<key> <op> <value>` expression format (normative; defined in `spec/runtime-flow-binding.md §Condition Expression Format`):
+- `context.decide.status == ready` (string comparison against a context field)
+- `context.score_node.score > 0.8` (numeric comparison)
+- `inputs.user_tier == premium` (field access on invocation inputs)
 
-Runners MAY support alternative expression languages but SHOULD support JSONPath for interoperability. Runners MUST document their supported expression language and MUST fail gracefully if a condition cannot be evaluated (see [Error & Failure Semantics](#error--failure-semantics)).
+The `<key>` is a dot-notation path from the state root: first segment is one of `inputs`, `context`, `memory`, `tool_responses`; for `context` and `tool_responses`, the second segment is the `node.id` that wrote the value (per D2/D3); subsequent segments traverse the written value. Runners MUST support `==` and `!=`; SHOULD support `>`, `>=`, `<`, `<=`; MAY support `contains`, `not_contains`. Runners MUST fail with a clear error before execution starts if a condition is malformed or uses an unsupported operator (never silently evaluate to `true` or `false`).
 
 ### Multi-Path Execution
 
@@ -489,8 +489,8 @@ nodes:
     kind: "router"
     strategy: "conditional"
 edges:
-  - { from: "route", to: "fast-path", condition: "$.context.score > 0.8" }
-  - { from: "route", to: "slow-path", condition: "$.context.score <= 0.8" }
+  - { from: "route", to: "fast-path", condition: "context.scorer.score > 0.8" }
+  - { from: "route", to: "slow-path", condition: "context.scorer.score <= 0.8" }
 ```
 
 ---
@@ -551,23 +551,27 @@ After execution: `state.context["check-quality"] = {"passed": true, "score": 0.9
 
 **Purpose**: Terminal node. Collects the final result from context and returns it to the caller.
 
-**State reads**: `state.context[output_ref]` if `output_ref` is set; otherwise the last key written to `state.context` during the run.
+**State reads**: The value at the dot-path `output_ref` (from state root) if `output_ref` is set; otherwise the value of the last key written to `state.context` during the run.
 
 **State writes**: None. The `output` node does not modify state.
 
 **Fields**:
-- `output_ref` (optional): Names the `context` key to return as the run result. If absent, the runner uses the last key written to `state.context` as the fallback. Runners SHOULD document their last-written-key resolution behavior.
+- `output_ref` (optional): A dot-notation path from the state root (same format as condition expression keys; see `spec/runtime-flow-binding.md §Condition Expression Format`). Examples:
+  - `context.answer` → `state.context["answer"]` (the full context value written by node `"answer"`)
+  - `context.chat-llm.content` → `state.context["chat-llm"]["content"]` (a specific field within node `"chat-llm"`'s context value)
+  - `tool_responses.search.0.url` → first result URL from tool node `"search"`
+  If absent, the runner returns the value of the last key written to `state.context`. Runners SHOULD document their last-written-key resolution behavior.
 
-**Error behavior**: If `output_ref` is set but the named key is absent from `state.context`, this is a permanent failure.
+**Error behavior**: If `output_ref` is set but the resolved path is absent from state, this is a permanent failure.
 
 **Example**:
 ```yaml
 nodes:
   - id: "done"
     kind: "output"
-    output_ref: "answer"
+    output_ref: "context.chat-llm.content"
 ```
-Run result ← `state.context["answer"]`.
+Run result ← `state.context["chat-llm"]["content"]`.
 
 ---
 

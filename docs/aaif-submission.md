@@ -34,6 +34,15 @@ This document tracks readiness for AAIF (AI Agent Interoperability Foundation) s
 - [ ] Tag `v0.1.1` in git: `git tag -a v0.1.1 -m "ADP v0.1.1 — framework interop guide, runtime-flow binding, semantic validation, runner harness"`
 - [ ] Review AAIF sandbox process requirements at submission time (process may have changed)
 
+## v0.1.2 Fixes (Done)
+
+| Fix | Status | Location |
+|-----|--------|----------|
+| Condition expression format conflict resolved | Done | `spec/esp.md §Edge Condition Evaluation` |
+| `output_ref` dot-path semantics specified | Done | `spec/esp.md §output node` |
+| Router state-write contradiction fixed | Done | `scripts/esp-conformance-fixtures.yaml`, `spec/esp.md §router` |
+| `runtime_ref` negative fixture + tests | Done | `fixtures/semantic/sem_neg_runtime_ref.yaml`, all 4 SDKs |
+
 ## v0.1.1 Additions (Done)
 
 | Addition | Status | Location |

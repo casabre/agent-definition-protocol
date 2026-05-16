@@ -310,6 +310,32 @@ graph:
 }
 
 #[test]
+fn semantic_validation_rejects_bad_runtime_ref() {
+    let adp = Adp {
+        adp_version: "0.1.0".into(),
+        id: "agent.test".into(),
+        conformance_class: None,
+        runtime: Runtime {
+            execution: vec![python_entry()],
+            models: None,
+        },
+        flow: serde_yaml::from_str(r#"
+graph:
+  nodes:
+    - id: "n1"
+      kind: "llm"
+      runtime_ref: "missing-backend"
+  edges: []
+  start_nodes: ["n1"]
+  end_nodes: ["n1"]
+"#).unwrap(),
+        evaluation: serde_yaml::Value::Null,
+    };
+    let errors = validate_adp_semantics(&adp);
+    assert!(errors.iter().any(|e| e.contains("runtime_ref")), "Expected runtime_ref error, got: {:?}", errors);
+}
+
+#[test]
 fn validation_rejects_conformance_class_full_with_empty_flow() {
     let adp = Adp {
         adp_version: "0.1.0".into(),

@@ -291,6 +291,16 @@ def test_semantic_validation_rejects_bad_model_ref():
     assert any("model_ref" in e for e in errors), f"Expected model_ref error, got: {errors}"
 
 
+def test_semantic_validation_rejects_bad_runtime_ref():
+    """validate_adp_semantics detects runtime_ref pointing to a nonexistent execution entry."""
+    fixture_path = Path(__file__).resolve().parents[2].parent / "fixtures" / "semantic" / "sem_neg_runtime_ref.yaml"
+    if not fixture_path.exists():
+        pytest.skip(f"Fixture not found: {fixture_path}")
+    adp = ADP.from_file(fixture_path)
+    errors = validate_adp_semantics(adp)
+    assert any("runtime_ref" in e for e in errors), f"Expected runtime_ref error, got: {errors}"
+
+
 def test_validate_conformance_class_full_rejects_empty_flow():
     """validate_adp returns error when conformance_class=full but flow is empty."""
     adp = ADP(

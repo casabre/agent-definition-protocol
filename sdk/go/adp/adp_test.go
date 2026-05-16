@@ -341,6 +341,35 @@ func TestValidateADPSemanticsBadModelRef(t *testing.T) {
 	}
 }
 
+func TestValidateADPSemanticsBadRuntimeRef(t *testing.T) {
+	adp := &ADP{
+		ADPVersion: "0.1.0",
+		ID:         "runtime-ref",
+		Runtime: Runtime{
+			Execution: []RuntimeEntry{{Backend: "python", ID: "py", Entrypoint: "main:app"}},
+		},
+		Flow: map[string]interface{}{
+			"graph": map[string]interface{}{
+				"nodes":       []interface{}{map[string]interface{}{"id": "n1", "kind": "llm", "runtime_ref": "missing-backend"}},
+				"edges":       []interface{}{},
+				"start_nodes": []interface{}{"n1"},
+				"end_nodes":   []interface{}{"n1"},
+			},
+		},
+		Evaluation: map[string]interface{}{},
+	}
+	errors := ValidateADPSemantics(adp)
+	found := false
+	for _, e := range errors {
+		if strings.Contains(e, "runtime_ref") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected runtime_ref error, got: %v", errors)
+	}
+}
+
 func TestValidateADPConformanceClassFullRejectsEmptyFlow(t *testing.T) {
 	adp := &ADP{
 		ADPVersion:       "0.1.0",

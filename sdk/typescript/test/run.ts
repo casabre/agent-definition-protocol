@@ -148,6 +148,27 @@ function testSemanticValidationRejectsBadModelRef() {
   assert.ok(errors.some((e: string) => e.includes("model_ref")), `Expected model_ref error, got: ${errors.join("; ")}`);
 }
 
+function testSemanticValidationRejectsBadRuntimeRef() {
+  const adp = {
+    adp_version: "0.1.0",
+    id: "agent.test",
+    runtime: {
+      execution: [{ backend: "python", id: "py", entrypoint: "agent.main:app" }],
+    },
+    flow: {
+      graph: {
+        nodes: [{ id: "n1", kind: "llm", runtime_ref: "missing-backend" }],
+        edges: [],
+        start_nodes: ["n1"],
+        end_nodes: ["n1"],
+      },
+    },
+    evaluation: {},
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(errors.some((e: string) => e.includes("runtime_ref")), `Expected runtime_ref error, got: ${errors.join("; ")}`);
+}
+
 function testConformanceClassFullRejectsEmptyFlow() {
   const adp = {
     adp_version: "0.1.0",
@@ -170,6 +191,7 @@ function testConformanceClassFullRejectsEmptyFlow() {
   testSemanticValidationRejectsDuplicateNode();
   testSemanticValidationRejectsBadSuiteRef();
   testSemanticValidationRejectsBadModelRef();
+  testSemanticValidationRejectsBadRuntimeRef();
   testConformanceClassFullRejectsEmptyFlow();
   console.log("ts tests passed");
 })();

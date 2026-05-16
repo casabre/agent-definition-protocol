@@ -113,7 +113,7 @@ scenarios:
 
   - id: "router-conditional"
     node_kind: "router"
-    description: "D4: router node fires the conditional edge whose condition matches current state"
+    description: "D4: router activates the conditional edge matching current state; router writes NO state"
     manifest_fragment:
       runtime:
         execution:
@@ -133,33 +133,32 @@ scenarios:
           edges:
             - from: "decide"
               to: "path-approved"
-              condition: "context.decide.decision == approved"
+              condition: "inputs.decision == approved"
             - from: "decide"
               to: "path-rejected"
-              condition: "context.decide.decision == rejected"
+              condition: "inputs.decision == rejected"
           start_nodes: ["decide"]
           end_nodes: ["path-approved", "path-rejected"]
       evaluation: {}
     invocation:
       inputs:
         request: "approve this"
+        decision: "approved"
     expected_state_transitions:
       - after_node: "decide"
         state:
           inputs:
             request: "approve this"
-          context:
-            decide:
-              decision: "approved"
+            decision: "approved"
+          context: {}
           memory: {}
           tool_responses: {}
       - after_node: "path-approved"
         state:
           inputs:
             request: "approve this"
+            decision: "approved"
           context:
-            decide:
-              decision: "approved"
             path-approved:
               content: "approved response"
           memory: {}

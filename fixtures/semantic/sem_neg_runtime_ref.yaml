@@ -1,0 +1,26 @@
+adp_version: "0.1.0"
+id: "fixture.semantic.neg.runtime-ref"
+runtime:
+  execution:
+    - backend: "python"
+      id: "py-backend"
+      entrypoint: "main:app"
+flow:
+  id: "fixture.flow"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+      - id: "llm"
+        kind: "llm"
+        runtime_ref: "missing-backend"  # does not exist in runtime.execution
+      - id: "output"
+        kind: "output"
+    edges:
+      - from: "input"
+        to: "llm"
+      - from: "llm"
+        to: "output"
+    start_nodes: ["input"]
+    end_nodes: ["output"]
+evaluation: {}
