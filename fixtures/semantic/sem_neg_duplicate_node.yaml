@@ -1,26 +1,26 @@
 adp_version: "0.1.0"
-id: "acme.example.simple-agent"
-conformance_class: "minimal"
+id: "fixture.semantic.neg.duplicate-node"
 runtime:
   execution:
-    - backend: "custom"
-      id: "acme-external-http"
-      type: "external-http"
-      endpoint: "https://api.acme.ai/simple-agent/run"
+    - backend: "python"
+      id: "py"
+      entrypoint: "agent.main:app"
 flow:
-  id: "flow.simple"
+  id: "fixture.flow"
   graph:
     nodes:
       - id: "input"
         kind: "input"
+      - id: "input"  # duplicate id
+        kind: "output"
     edges: []
     start_nodes: ["input"]
     end_nodes: ["input"]
 evaluation:
   suites:
-    - id: "smoke"
+    - id: "suite1"
       metrics:
-        - id: "ping"
+        - id: "m1"
           type: "deterministic"
           function: "noop"
           scoring: "boolean"

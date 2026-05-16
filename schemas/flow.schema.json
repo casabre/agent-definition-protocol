@@ -74,6 +74,11 @@
         "memory_ref": {"type": "string", "description": "Names the memory provider for retriever nodes"},
         "suite_ref": {"type": "string", "description": "References an evaluation suite ID for evaluator nodes"},
         "output_ref": {"type": "string", "description": "Names the context key to return as the run result for output nodes"},
+        "runtime_ref": {
+          "type": "string",
+          "description": "References a runtime.execution[].id to bind this node to a specific backend. If absent, the runner selects the first compatible backend per the binding matrix in spec/runtime-flow-binding.md.",
+          "$comment": "Optional in v0.1.1; required when multiple compatible backends are declared and explicit selection is needed."
+        },
         "blocking": {"type": "boolean", "description": "If true, a failing evaluator node halts the flow (default: false)"},
         "strategy": {
           "type": "string",

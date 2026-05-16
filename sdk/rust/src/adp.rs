@@ -50,6 +50,8 @@ pub struct Runtime {
 pub struct Adp {
     pub adp_version: String,
     pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conformance_class: Option<String>,
     pub runtime: Runtime,
     pub flow: serde_yaml::Value,
     pub evaluation: serde_yaml::Value,

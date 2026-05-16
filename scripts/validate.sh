@@ -68,3 +68,5 @@ for name, schema_path in schemas.items():
         else:
             raise SystemExit(f"Negative fixture unexpectedly passed: {doc}")
 PY
+
+"$PYTHON_BIN" scripts/esp-runner-harness.py --dry-run

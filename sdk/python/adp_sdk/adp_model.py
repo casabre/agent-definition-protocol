@@ -17,6 +17,7 @@ class RuntimeEntry(BaseModel):
 
 
 class RuntimeModel(BaseModel):
+    model_config = dict(extra="allow")
     execution: list[RuntimeEntry]
 
 

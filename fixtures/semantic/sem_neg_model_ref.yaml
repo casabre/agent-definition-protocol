@@ -1,0 +1,38 @@
+adp_version: "0.1.0"
+id: "fixture.semantic.neg.model-ref"
+runtime:
+  execution:
+    - backend: "openai"
+      id: "llm-backend"
+      model: "gpt-4o"
+  models:
+    - id: "gpt4"
+      provider: "openai"
+      model: "gpt-4o"
+flow:
+  id: "fixture.flow"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+      - id: "llm"
+        kind: "llm"
+        model_ref: "missing-model"  # does not exist in runtime.models
+      - id: "output"
+        kind: "output"
+    edges:
+      - from: "input"
+        to: "llm"
+      - from: "llm"
+        to: "output"
+    start_nodes: ["input"]
+    end_nodes: ["output"]
+evaluation:
+  suites:
+    - id: "suite1"
+      metrics:
+        - id: "m1"
+          type: "deterministic"
+          function: "noop"
+          scoring: "boolean"
+          threshold: true

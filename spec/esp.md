@@ -309,6 +309,14 @@ State is passed between nodes as follows:
    - Node performs operations (LLM call, tool invocation, etc.)
    - Node updates state (typically `context` and/or `tool_responses`)
 
+### Parallel Branch Write Semantics
+
+Each node writes to a state key scoped to its own `node.id` — for example, an `llm` node named `summarizer` writes to `state.context["summarizer"]`. Because keys are node-scoped, parallel branches writing to different context keys cannot structurally conflict.
+
+Runners MUST reject manifests with duplicate node IDs before execution begins. Duplicate IDs violate the uniqueness invariant and would cause one node's writes to silently overwrite another's. The semantic validation checks in ADP SDKs enforce this.
+
+If a future use case requires two nodes to share a context key (e.g., a fan-in aggregation pattern), the sharing MUST be declared explicitly in `extensions.x_<vendor>` with stated merge semantics. ADP v0.1.1 does not define a standard shared-key protocol.
+
 3. **State propagation**: After node execution, updated state is passed to subsequent nodes via edge traversal.
 
 4. **State consistency**: Runners MUST ensure that state updates are consistent with observable ordering (see [Execution Model Overview](#execution-model-overview)). If nodes execute in parallel, state updates MUST be merged correctly.

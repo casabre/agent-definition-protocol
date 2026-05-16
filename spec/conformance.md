@@ -19,6 +19,8 @@ ADP defines two conformance classes:
 - **ADP-Minimal**: MUST accept/emit manifests with required top-level fields and at least one runtime backend; MAY leave flow/evaluation empty objects.
 - **ADP-Full**: MUST satisfy all required fields across runtime, flow, evaluation, tools, governance, and packaging (OCI profile). MUST validate against published schemas.
 
+Manifests MAY declare their conformance class explicitly via the `conformance_class` field (`"minimal"` or `"full"`). If absent, implementations SHOULD infer class from content (empty `flow` or `evaluation` implies minimal). Implementations MUST reject a manifest that explicitly declares `"full"` but provides an empty `flow` or `evaluation`; the error message MUST state which section is empty.
+
 ## Required Behaviors
 
 ### Schema Validation

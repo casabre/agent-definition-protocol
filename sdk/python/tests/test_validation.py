@@ -3,7 +3,7 @@
 from pathlib import Path
 import pytest
 from adp_sdk.adp_model import ADP, RuntimeModel, RuntimeEntry, FlowModel, EvaluationModel
-from adp_sdk.validation import validate_adp
+from adp_sdk.validation import validate_adp, validate_adp_semantics
 
 
 def test_validate_minimal_valid_adp():
@@ -225,7 +225,7 @@ def test_validate_v0_1_0_fixture():
 def test_validate_backend_types():
     """Test validation with different backend types."""
     backends = ["docker", "wasm", "python", "typescript", "binary", "custom"]
-    
+
     for backend in backends:
         adp = ADP(
             adp_version="0.1.0",
@@ -239,4 +239,70 @@ def test_validate_backend_types():
         errors = validate_adp(adp)
         # Backend type validation may or may not be in schema, so just check it doesn't crash
         assert isinstance(errors, list), f"Validation should return list for backend {backend}"
+
+
+def test_semantic_validation_passes_for_full_fixture():
+    """validate_adp_semantics returns no errors for a valid full fixture."""
+    fixture_path = Path(__file__).resolve().parents[2].parent / "fixtures" / "adp_full.yaml"
+    if not fixture_path.exists():
+        pytest.skip(f"Fixture not found: {fixture_path}")
+    adp = ADP.from_file(fixture_path)
+    errors = validate_adp_semantics(adp)
+    assert errors == [], f"Expected no semantic errors, got: {errors}"
+
+
+def test_semantic_validation_rejects_dangling_edge():
+    """validate_adp_semantics detects an edge referencing a nonexistent node."""
+    fixture_path = Path(__file__).resolve().parents[2].parent / "fixtures" / "semantic" / "sem_neg_edge_dangling.yaml"
+    if not fixture_path.exists():
+        pytest.skip(f"Fixture not found: {fixture_path}")
+    adp = ADP.from_file(fixture_path)
+    errors = validate_adp_semantics(adp)
+    assert any("ghost" in e for e in errors), f"Expected dangling edge error mentioning 'ghost', got: {errors}"
+
+
+def test_semantic_validation_rejects_duplicate_node():
+    """validate_adp_semantics detects duplicate node IDs."""
+    fixture_path = Path(__file__).resolve().parents[2].parent / "fixtures" / "semantic" / "sem_neg_duplicate_node.yaml"
+    if not fixture_path.exists():
+        pytest.skip(f"Fixture not found: {fixture_path}")
+    adp = ADP.from_file(fixture_path)
+    errors = validate_adp_semantics(adp)
+    assert any("duplicate" in e for e in errors), f"Expected duplicate node error, got: {errors}"
+
+
+def test_semantic_validation_rejects_bad_suite_ref():
+    """validate_adp_semantics detects suite_ref pointing to a nonexistent suite."""
+    fixture_path = Path(__file__).resolve().parents[2].parent / "fixtures" / "semantic" / "sem_neg_suite_ref.yaml"
+    if not fixture_path.exists():
+        pytest.skip(f"Fixture not found: {fixture_path}")
+    adp = ADP.from_file(fixture_path)
+    errors = validate_adp_semantics(adp)
+    assert any("suite_ref" in e for e in errors), f"Expected suite_ref error, got: {errors}"
+
+
+def test_semantic_validation_rejects_bad_model_ref():
+    """validate_adp_semantics detects model_ref pointing to a nonexistent model."""
+    fixture_path = Path(__file__).resolve().parents[2].parent / "fixtures" / "semantic" / "sem_neg_model_ref.yaml"
+    if not fixture_path.exists():
+        pytest.skip(f"Fixture not found: {fixture_path}")
+    adp = ADP.from_file(fixture_path)
+    errors = validate_adp_semantics(adp)
+    assert any("model_ref" in e for e in errors), f"Expected model_ref error, got: {errors}"
+
+
+def test_validate_conformance_class_full_rejects_empty_flow():
+    """validate_adp returns error when conformance_class=full but flow is empty."""
+    adp = ADP(
+        adp_version="0.1.0",
+        id="agent.full-empty",
+        conformance_class="full",
+        runtime=RuntimeModel(execution=[
+            RuntimeEntry(backend="python", id="py", entrypoint="main:app")
+        ]),
+        flow=FlowModel(),
+        evaluation=EvaluationModel(),
+    )
+    errors = validate_adp(adp)
+    assert any("full" in e and "flow" in e for e in errors), f"Expected conformance_class 'full' error, got: {errors}"
 

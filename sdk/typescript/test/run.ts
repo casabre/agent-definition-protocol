@@ -2,7 +2,7 @@ import assert from "assert";
 import fs from "fs";
 import path from "path";
 import { createPackage, openPackage } from "../src/adpkg.js";
-import { validateAdp } from "../src/validation.js";
+import { validateAdp, validateAdpSemantics } from "../src/validation.js";
 
 function buildSource(tmp: string) {
   const adpDir = path.join(tmp, "adp");
@@ -49,9 +49,127 @@ function testPackage() {
   assert.equal(adp.id, "agent.test");
 }
 
+function testSemanticValidationPassesForValidAdp() {
+  const adp = {
+    adp_version: "0.1.0",
+    id: "agent.test",
+    runtime: { execution: [{ backend: "python", id: "py", entrypoint: "agent.main:app" }] },
+    flow: {
+      id: "flow.test",
+      graph: {
+        nodes: [{ id: "n1", kind: "input" }, { id: "n2", kind: "output" }],
+        edges: [{ from: "n1", to: "n2" }],
+        start_nodes: ["n1"],
+        end_nodes: ["n2"],
+      },
+    },
+    evaluation: { suites: [{ id: "s1", metrics: [{ id: "m1", type: "deterministic", function: "noop", scoring: "boolean", threshold: true }] }] },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.equal(errors.length, 0, `Expected no semantic errors, got: ${errors.join("; ")}`);
+}
+
+function testSemanticValidationRejectsDanglingEdge() {
+  const adp = {
+    adp_version: "0.1.0",
+    id: "agent.test",
+    runtime: { execution: [{ backend: "python", id: "py", entrypoint: "agent.main:app" }] },
+    flow: {
+      graph: {
+        nodes: [{ id: "input", kind: "input" }],
+        edges: [{ from: "ghost", to: "input" }],
+        start_nodes: ["input"],
+        end_nodes: ["input"],
+      },
+    },
+    evaluation: {},
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(errors.some((e: string) => e.includes("ghost")), `Expected dangling edge error, got: ${errors.join("; ")}`);
+}
+
+function testSemanticValidationRejectsDuplicateNode() {
+  const adp = {
+    adp_version: "0.1.0",
+    id: "agent.test",
+    runtime: { execution: [{ backend: "python", id: "py", entrypoint: "agent.main:app" }] },
+    flow: {
+      graph: {
+        nodes: [{ id: "input", kind: "input" }, { id: "input", kind: "output" }],
+        edges: [],
+        start_nodes: ["input"],
+        end_nodes: ["input"],
+      },
+    },
+    evaluation: {},
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(errors.some((e: string) => e.includes("duplicate")), `Expected duplicate node error, got: ${errors.join("; ")}`);
+}
+
+function testSemanticValidationRejectsBadSuiteRef() {
+  const adp = {
+    adp_version: "0.1.0",
+    id: "agent.test",
+    runtime: { execution: [{ backend: "python", id: "py", entrypoint: "agent.main:app" }] },
+    flow: {
+      graph: {
+        nodes: [{ id: "n1", kind: "llm", suite_ref: "missing-suite" }],
+        edges: [],
+        start_nodes: ["n1"],
+        end_nodes: ["n1"],
+      },
+    },
+    evaluation: { suites: [{ id: "suite1", metrics: [] }] },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(errors.some((e: string) => e.includes("suite_ref")), `Expected suite_ref error, got: ${errors.join("; ")}`);
+}
+
+function testSemanticValidationRejectsBadModelRef() {
+  const adp = {
+    adp_version: "0.1.0",
+    id: "agent.test",
+    runtime: {
+      execution: [{ backend: "python", id: "py", entrypoint: "agent.main:app" }],
+      models: [{ id: "gpt4", provider: "openai", model: "gpt-4o" }],
+    },
+    flow: {
+      graph: {
+        nodes: [{ id: "n1", kind: "llm", model_ref: "missing-model" }],
+        edges: [],
+        start_nodes: ["n1"],
+        end_nodes: ["n1"],
+      },
+    },
+    evaluation: {},
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(errors.some((e: string) => e.includes("model_ref")), `Expected model_ref error, got: ${errors.join("; ")}`);
+}
+
+function testConformanceClassFullRejectsEmptyFlow() {
+  const adp = {
+    adp_version: "0.1.0",
+    id: "agent.full",
+    conformance_class: "full",
+    runtime: { execution: [{ backend: "python", id: "py", entrypoint: "agent.main:app" }] },
+    flow: {},
+    evaluation: { suites: [{ id: "s1", metrics: [] }] },
+  } as any;
+  const errors = validateAdp(adp);
+  assert.ok(errors.some((e: string) => e.includes("full") && e.includes("flow")), `Expected conformance_class error, got: ${errors.join("; ")}`);
+}
+
 (function run() {
   testValidateRejectsInvalidFlow();
   testValidate();
   testPackage();
+  testSemanticValidationPassesForValidAdp();
+  testSemanticValidationRejectsDanglingEdge();
+  testSemanticValidationRejectsDuplicateNode();
+  testSemanticValidationRejectsBadSuiteRef();
+  testSemanticValidationRejectsBadModelRef();
+  testConformanceClassFullRejectsEmptyFlow();
   console.log("ts tests passed");
 })();

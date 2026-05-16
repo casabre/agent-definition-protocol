@@ -3,6 +3,25 @@
 All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [0.1.1] - 2026-05-16
+
+### Added
+- `spec/runtime-flow-binding.md` — normative backend compatibility matrix, condition expression format (`<key> <op> <value>`), and graph construction algorithm for runner implementers
+- `spec/framework-interop.md` — informative LangGraph/AutoGen/Semantic Kernel/CrewAI mapping guide with `make_condition_fn`, `resolve_backend`, and hello-world construction pseudocode
+- `runtime_ref` field in `schemas/flow.schema.json` — binds a flow node to a specific `runtime.execution[]` backend; overrides default compatibility-matrix selection
+- `conformance_class` field in `schemas/adp.schema.json` — explicit `"minimal"` or `"full"` declaration; absent = infer from content
+- `validate_adp_semantics()` / `validateAdpSemantics()` / `ValidateADPSemantics()` in all four SDKs — cross-schema referential integrity (edge→node, start/end nodes, suite_ref, model_ref, runtime_ref)
+- `fixtures/semantic/` — four negative YAML fixtures for semantic validation (dangling edge, duplicate node, bad suite_ref, bad model_ref)
+- `scripts/esp-conformance-fixtures.yaml` — seven runner conformance scenarios per ADR D1–D7 (one per node kind)
+- `scripts/esp-runner-harness.py` — `RunnerAdapter` ABC, `--dry-run` ADR compliance check, `--adapter` live execution mode
+- `examples/runners/langgraph/` — ADP↔LangGraph round-trip pytest suite (`build_adp_graph.py`, `conftest.py`, `test_roundtrip.py`, `requirements.txt`, `README.md`)
+- Parallel branch write semantics clarified in `spec/esp.md`
+
+### Fixed
+- `conformance_class: "full"` + empty `flow` or `evaluation` now returns a validation error in all four SDKs
+- `runtime.models` field now preserved through Python SDK `model_dump()` (added `extra="allow"` to `RuntimeModel`)
+- `conformance_class` and `runtime_ref` fields added to Rust `Adp` struct and Go `ADP` struct for full round-trip support
+
 ## [0.1.0] - 2026-05-15
 
 ### Added

@@ -11,6 +11,12 @@
     "description": {"type": "string"},
     "owner": {"type": "string"},
     "tags": {"type": "array", "items": {"type": "string"}},
+    "conformance_class": {
+      "type": "string",
+      "enum": ["minimal", "full"],
+      "description": "Explicit conformance class declaration. If absent, implementations infer class from content (empty flow/evaluation = minimal). 'full' requires non-empty flow and evaluation.",
+      "$comment": "v0.1.1. SDKs MUST enforce: conformance_class=full + empty flow/evaluation is an error."
+    },
     "runtime": {"$ref": "runtime.schema.json"},
     "flow": {"$ref": "flow.schema.json"},
     "prompts": {

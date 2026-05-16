@@ -1,0 +1,287 @@
+# ESP Runner Conformance Fixtures
+# One scenario per ADR node-kind rule (D1–D7).
+# Used by scripts/esp-runner-harness.py --dry-run (validates format + ADR compliance)
+# and --adapter <module.Class> (runs against a real runner).
+
+scenarios:
+  - id: "input-basic"
+    node_kind: "input"
+    description: "D1: input node routes invocation payload to state.inputs verbatim"
+    manifest_fragment:
+      runtime:
+        execution:
+          - backend: "python"
+            id: "py"
+            entrypoint: "main:app"
+      flow:
+        id: "input-basic.flow"
+        graph:
+          nodes:
+            - id: "start"
+              kind: "input"
+          edges: []
+          start_nodes: ["start"]
+          end_nodes: ["start"]
+      evaluation: {}
+    invocation:
+      inputs:
+        query: "hello world"
+    expected_state_transitions:
+      - after_node: "start"
+        state:
+          inputs:
+            query: "hello world"
+          context: {}
+          memory: {}
+          tool_responses: {}
+    expected_output:
+      query: "hello world"
+
+  - id: "llm-context-write"
+    node_kind: "llm"
+    description: "D2: llm node writes LLM response to state.context[node.id]"
+    manifest_fragment:
+      runtime:
+        execution:
+          - backend: "openai"
+            id: "llm-backend"
+            model: "gpt-4o"
+        models:
+          - id: "gpt4"
+            provider: "openai"
+            model: "gpt-4o"
+      flow:
+        id: "llm-context-write.flow"
+        graph:
+          nodes:
+            - id: "chat-llm"
+              kind: "llm"
+              model_ref: "gpt4"
+          edges: []
+          start_nodes: ["chat-llm"]
+          end_nodes: ["chat-llm"]
+      evaluation: {}
+    invocation:
+      inputs:
+        query: "Summarize this"
+    expected_state_transitions:
+      - after_node: "chat-llm"
+        state:
+          inputs:
+            query: "Summarize this"
+          context:
+            chat-llm:
+              content: "mocked response"
+          memory: {}
+          tool_responses: {}
+    expected_output: "mocked response"
+
+  - id: "tool-append"
+    node_kind: "tool"
+    description: "D3: tool node appends result to state.tool_responses[node.id]; never replaces"
+    manifest_fragment:
+      runtime:
+        execution:
+          - backend: "http"
+            id: "http-backend"
+            endpoint: "https://api.example.com/search"
+      flow:
+        id: "tool-append.flow"
+        graph:
+          nodes:
+            - id: "search-tool"
+              kind: "tool"
+          edges: []
+          start_nodes: ["search-tool"]
+          end_nodes: ["search-tool"]
+      evaluation: {}
+    invocation:
+      inputs:
+        query: "latest metrics"
+    expected_state_transitions:
+      - after_node: "search-tool"
+        state:
+          inputs:
+            query: "latest metrics"
+          context: {}
+          memory: {}
+          tool_responses:
+            search-tool:
+              - result: "result-1"
+    expected_output:
+      - result: "result-1"
+
+  - id: "router-conditional"
+    node_kind: "router"
+    description: "D4: router node fires the conditional edge whose condition matches current state"
+    manifest_fragment:
+      runtime:
+        execution:
+          - backend: "python"
+            id: "py"
+            entrypoint: "main:app"
+      flow:
+        id: "router-conditional.flow"
+        graph:
+          nodes:
+            - id: "decide"
+              kind: "router"
+            - id: "path-approved"
+              kind: "llm"
+            - id: "path-rejected"
+              kind: "output"
+          edges:
+            - from: "decide"
+              to: "path-approved"
+              condition: "context.decide.decision == approved"
+            - from: "decide"
+              to: "path-rejected"
+              condition: "context.decide.decision == rejected"
+          start_nodes: ["decide"]
+          end_nodes: ["path-approved", "path-rejected"]
+      evaluation: {}
+    invocation:
+      inputs:
+        request: "approve this"
+    expected_state_transitions:
+      - after_node: "decide"
+        state:
+          inputs:
+            request: "approve this"
+          context:
+            decide:
+              decision: "approved"
+          memory: {}
+          tool_responses: {}
+      - after_node: "path-approved"
+        state:
+          inputs:
+            request: "approve this"
+          context:
+            decide:
+              decision: "approved"
+            path-approved:
+              content: "approved response"
+          memory: {}
+          tool_responses: {}
+    expected_output: "approved response"
+
+  - id: "retriever-memory-bind"
+    node_kind: "retriever"
+    description: "D5: retriever resolves memory_ref and writes retrieved documents to state.context[node.id]"
+    manifest_fragment:
+      runtime:
+        execution:
+          - backend: "pinecone"
+            id: "vector-store"
+            endpoint: "https://acme-pinecone.example"
+      flow:
+        id: "retriever-memory-bind.flow"
+        graph:
+          nodes:
+            - id: "retrieve-docs"
+              kind: "retriever"
+              memory_ref: "vector-store"
+          edges: []
+          start_nodes: ["retrieve-docs"]
+          end_nodes: ["retrieve-docs"]
+      evaluation: {}
+    invocation:
+      inputs:
+        query: "relevant documents"
+    expected_state_transitions:
+      - after_node: "retrieve-docs"
+        state:
+          inputs:
+            query: "relevant documents"
+          context:
+            retrieve-docs:
+              documents:
+                - text: "doc 1"
+                  score: 0.95
+          memory: {}
+          tool_responses: {}
+    expected_output:
+      - text: "doc 1"
+        score: 0.95
+
+  - id: "evaluator-suite-ref"
+    node_kind: "evaluator"
+    description: "D6: evaluator resolves suite_ref and writes {passed, score} to state.context[node.id]"
+    manifest_fragment:
+      runtime:
+        execution:
+          - backend: "python"
+            id: "py"
+            entrypoint: "main:app"
+      flow:
+        id: "evaluator-suite-ref.flow"
+        graph:
+          nodes:
+            - id: "eval-node"
+              kind: "evaluator"
+              suite_ref: "basic-suite"
+          edges: []
+          start_nodes: ["eval-node"]
+          end_nodes: ["eval-node"]
+      evaluation:
+        suites:
+          - id: "basic-suite"
+            metrics:
+              - id: "m1"
+                type: "deterministic"
+                function: "noop"
+                scoring: "boolean"
+                threshold: true
+    invocation:
+      inputs:
+        candidate: "some output to evaluate"
+    expected_state_transitions:
+      - after_node: "eval-node"
+        state:
+          inputs:
+            candidate: "some output to evaluate"
+          context:
+            eval-node:
+              passed: true
+              score: 1.0
+          memory: {}
+          tool_responses: {}
+    expected_output:
+      passed: true
+      score: 1.0
+
+  - id: "output-ref-resolve"
+    node_kind: "output"
+    description: "D7: output node resolves output_ref to produce final output; falls back to last context key"
+    manifest_fragment:
+      runtime:
+        execution:
+          - backend: "python"
+            id: "py"
+            entrypoint: "main:app"
+      flow:
+        id: "output-ref-resolve.flow"
+        graph:
+          nodes:
+            - id: "final"
+              kind: "output"
+              output_ref: "context.chat-llm.content"
+          edges: []
+          start_nodes: ["final"]
+          end_nodes: ["final"]
+      evaluation: {}
+    invocation:
+      inputs:
+        query: "what is 2+2"
+    expected_state_transitions:
+      - after_node: "final"
+        state:
+          inputs:
+            query: "what is 2+2"
+          context:
+            chat-llm:
+              content: "4"
+          memory: {}
+          tool_responses: {}
+    expected_output: "4"

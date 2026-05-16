@@ -34,15 +34,16 @@ type Runtime struct {
 }
 
 type ADP struct {
-    ADPVersion string      `yaml:"adp_version"        json:"adp_version"`
-    ID         string      `yaml:"id"                 json:"id"`
-    Name       string      `yaml:"name,omitempty"     json:"name,omitempty"`
-    Description string     `yaml:"description,omitempty" json:"description,omitempty"`
-    Owner      string      `yaml:"owner,omitempty"    json:"owner,omitempty"`
-    Tags       []string    `yaml:"tags,omitempty"     json:"tags,omitempty"`
-    Runtime    Runtime     `yaml:"runtime"            json:"runtime"`
-    Flow       interface{} `yaml:"flow"               json:"flow"`
-    Evaluation interface{} `yaml:"evaluation"         json:"evaluation"`
+    ADPVersion      string      `yaml:"adp_version"              json:"adp_version"`
+    ID              string      `yaml:"id"                       json:"id"`
+    Name            string      `yaml:"name,omitempty"           json:"name,omitempty"`
+    Description     string      `yaml:"description,omitempty"    json:"description,omitempty"`
+    Owner           string      `yaml:"owner,omitempty"          json:"owner,omitempty"`
+    Tags            []string    `yaml:"tags,omitempty"           json:"tags,omitempty"`
+    ConformanceClass string     `yaml:"conformance_class,omitempty" json:"conformance_class,omitempty"`
+    Runtime         Runtime     `yaml:"runtime"                  json:"runtime"`
+    Flow            interface{} `yaml:"flow"                     json:"flow"`
+    Evaluation      interface{} `yaml:"evaluation"               json:"evaluation"`
 }
 
 func LoadADP(path string) (*ADP, error) {

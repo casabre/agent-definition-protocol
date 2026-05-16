@@ -3,6 +3,7 @@ package adp
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -201,6 +202,157 @@ func TestValidateADPDifferentBackends(t *testing.T) {
 		}
 		// Should not crash, validation may or may not check backend type
 		_ = ValidateADP(adp)
+	}
+}
+
+func TestValidateADPSemanticsPasses(t *testing.T) {
+	adp := &ADP{
+		ADPVersion: "0.1.0",
+		ID:         "ok",
+		Runtime:    Runtime{Execution: []RuntimeEntry{{Backend: "python", ID: "py", Entrypoint: "main:app"}}},
+		Flow: map[string]interface{}{
+			"graph": map[string]interface{}{
+				"nodes":       []interface{}{map[string]interface{}{"id": "n1", "kind": "input"}, map[string]interface{}{"id": "n2", "kind": "output"}},
+				"edges":       []interface{}{map[string]interface{}{"from": "n1", "to": "n2"}},
+				"start_nodes": []interface{}{"n1"},
+				"end_nodes":   []interface{}{"n2"},
+			},
+		},
+		Evaluation: map[string]interface{}{
+			"suites": []interface{}{map[string]interface{}{"id": "s1", "metrics": []interface{}{}}},
+		},
+	}
+	errors := ValidateADPSemantics(adp)
+	if len(errors) != 0 {
+		t.Fatalf("expected no semantic errors, got: %v", errors)
+	}
+}
+
+func TestValidateADPSemanticsDanglingEdge(t *testing.T) {
+	adp := &ADP{
+		ADPVersion: "0.1.0",
+		ID:         "dangling",
+		Runtime:    Runtime{Execution: []RuntimeEntry{{Backend: "python", ID: "py", Entrypoint: "main:app"}}},
+		Flow: map[string]interface{}{
+			"graph": map[string]interface{}{
+				"nodes":       []interface{}{map[string]interface{}{"id": "input", "kind": "input"}},
+				"edges":       []interface{}{map[string]interface{}{"from": "ghost", "to": "input"}},
+				"start_nodes": []interface{}{"input"},
+				"end_nodes":   []interface{}{"input"},
+			},
+		},
+		Evaluation: map[string]interface{}{},
+	}
+	errors := ValidateADPSemantics(adp)
+	found := false
+	for _, e := range errors {
+		if strings.Contains(e, "ghost") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected dangling edge error mentioning 'ghost', got: %v", errors)
+	}
+}
+
+func TestValidateADPSemanticsDuplicateNode(t *testing.T) {
+	adp := &ADP{
+		ADPVersion: "0.1.0",
+		ID:         "dup",
+		Runtime:    Runtime{Execution: []RuntimeEntry{{Backend: "python", ID: "py", Entrypoint: "main:app"}}},
+		Flow: map[string]interface{}{
+			"graph": map[string]interface{}{
+				"nodes":       []interface{}{map[string]interface{}{"id": "input", "kind": "input"}, map[string]interface{}{"id": "input", "kind": "output"}},
+				"edges":       []interface{}{},
+				"start_nodes": []interface{}{"input"},
+				"end_nodes":   []interface{}{"input"},
+			},
+		},
+		Evaluation: map[string]interface{}{},
+	}
+	errors := ValidateADPSemantics(adp)
+	found := false
+	for _, e := range errors {
+		if strings.Contains(e, "duplicate") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected duplicate node error, got: %v", errors)
+	}
+}
+
+func TestValidateADPSemanticsBadSuiteRef(t *testing.T) {
+	adp := &ADP{
+		ADPVersion: "0.1.0",
+		ID:         "suite-ref",
+		Runtime:    Runtime{Execution: []RuntimeEntry{{Backend: "python", ID: "py", Entrypoint: "main:app"}}},
+		Flow: map[string]interface{}{
+			"graph": map[string]interface{}{
+				"nodes":       []interface{}{map[string]interface{}{"id": "n1", "kind": "llm", "suite_ref": "missing-suite"}},
+				"edges":       []interface{}{},
+				"start_nodes": []interface{}{"n1"},
+				"end_nodes":   []interface{}{"n1"},
+			},
+		},
+		Evaluation: map[string]interface{}{
+			"suites": []interface{}{map[string]interface{}{"id": "suite1", "metrics": []interface{}{}}},
+		},
+	}
+	errors := ValidateADPSemantics(adp)
+	found := false
+	for _, e := range errors {
+		if strings.Contains(e, "suite_ref") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected suite_ref error, got: %v", errors)
+	}
+}
+
+func TestValidateADPSemanticsBadModelRef(t *testing.T) {
+	adp := &ADP{
+		ADPVersion: "0.1.0",
+		ID:         "model-ref",
+		Runtime: Runtime{
+			Execution: []RuntimeEntry{{Backend: "python", ID: "py", Entrypoint: "main:app"}},
+			Models:    []Model{{ID: "gpt4", Provider: "openai", Model: "gpt-4o"}},
+		},
+		Flow: map[string]interface{}{
+			"graph": map[string]interface{}{
+				"nodes":       []interface{}{map[string]interface{}{"id": "n1", "kind": "llm", "model_ref": "missing-model"}},
+				"edges":       []interface{}{},
+				"start_nodes": []interface{}{"n1"},
+				"end_nodes":   []interface{}{"n1"},
+			},
+		},
+		Evaluation: map[string]interface{}{},
+	}
+	errors := ValidateADPSemantics(adp)
+	found := false
+	for _, e := range errors {
+		if strings.Contains(e, "model_ref") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected model_ref error, got: %v", errors)
+	}
+}
+
+func TestValidateADPConformanceClassFullRejectsEmptyFlow(t *testing.T) {
+	adp := &ADP{
+		ADPVersion:       "0.1.0",
+		ID:               "agent.full",
+		ConformanceClass: "full",
+		Runtime:          Runtime{Execution: []RuntimeEntry{{Backend: "python", ID: "py", Entrypoint: "main:app"}}},
+		Flow:             map[string]interface{}{},
+		Evaluation:       minimalEvaluation(),
+	}
+	err := ValidateADP(adp)
+	if err == nil {
+		t.Fatal("expected error for conformance_class=full with empty flow")
 	}
 }
 

@@ -11,16 +11,40 @@ runtime:
       entrypoint: "acme_agents.main:app"
       env:
         ACME_ENV: "dev"
+  models:
+    - id: "gpt4-planner"
+      provider: "openai"
+      model: "gpt-4o"
+    - id: "gpt4-synth"
+      provider: "openai"
+      model: "gpt-4o"
 flow:
   id: "acme.analytics.flow"
   graph:
     nodes:
       - id: "input"
         kind: "input"
+      - id: "planner"
+        kind: "llm"
+        model_ref: "gpt4-planner"
+        runtime_ref: "acme-python-agent"
+      - id: "executor"
+        kind: "tool"
+        runtime_ref: "acme-python-agent"
+      - id: "synthesizer"
+        kind: "llm"
+        model_ref: "gpt4-synth"
+        runtime_ref: "acme-python-agent"
       - id: "output"
         kind: "output"
     edges:
       - from: "input"
+        to: "planner"
+      - from: "planner"
+        to: "executor"
+      - from: "executor"
+        to: "synthesizer"
+      - from: "synthesizer"
         to: "output"
     start_nodes: ["input"]
     end_nodes: ["output"]
