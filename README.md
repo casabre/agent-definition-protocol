@@ -13,15 +13,17 @@
 
 ---
 
-Agent definitions live inside framework code. That works fine until you need to move an agent — different team, different environment, different framework. At that point you're reading framework internals to answer questions that should be trivial: what model does it use, what does it call, how do I know if it's working.
+You built an agent in LangGraph. It works. Now someone asks: "Can we run this in production? Can we evaluate it in CI? Can the other team use it with AutoGen?"
 
-ADP is a manifest format for AI agents. You describe the agent once in YAML — runtime, flow, evaluation — and any conformant runner can pick it up. Think of it the way you think of OpenAPI: not a runtime, a description that runtimes agree to read.
+Suddenly you're digging through framework internals to answer basic questions — what model does it use, what tools, how is it evaluated, how do I package it for the registry.
 
-> ADP is a **specification**, not a runtime or framework.
+**ADP is the OpenAPI for AI agents.** One YAML manifest declares your agent's runtime, flow graph, evaluation criteria, and packaging metadata. Frameworks and runners consume it. You move the agent without rewriting glue.
+
+> ADP is a specification, not a runtime. It defines the contract; your framework implements it.
 
 ---
 
-## What a manifest looks like
+## What it looks like
 
 ```yaml
 adp_version: "0.1.0"
@@ -54,29 +56,30 @@ evaluation:
         - { id: "factuality", type: "llm_judge", threshold: 0.85 }
 ```
 
+Validate it, pack it to OCI, hand it to any conformant runner — same manifest, any framework.
+
 ---
 
 ## Framework support
 
-The flow graph maps to the native concepts of each framework. You describe what the agent is already doing, not how each framework thinks:
+ADP's flow graph maps directly to each framework's native model:
 
 | ADP concept | LangGraph | AutoGen | Semantic Kernel | CrewAI |
 |---|---|---|---|---|
-| `flow.graph.nodes[]` | `StateGraph.add_node` | `ConversableAgent` | `KernelProcessStep` | `@listen` method |
+| `flow.graph.nodes[]` | `StateGraph.add_node` | `ConversableAgent` | `KernelProcessStep` | `@listen` |
 | conditional edge | `add_conditional_edges` | `GroupChatManager` | `OnEvent` | `@router` |
 | `start_nodes[]` | `set_entry_point` | first `initiate_chat` | process entry | `@start` |
 | `state.context[node.id]` | TypedDict `context` field | `chat_messages` | step output | flow state |
 | `node.model_ref` | `ChatOpenAI(model=...)` | `llm_config` | `OpenAIChatCompletion` | task LLM |
 
-Full mapping guides and a runnable LangGraph round-trip example: [`spec/framework-interop.md`](spec/framework-interop.md) and [`examples/runners/langgraph/`](examples/runners/langgraph/).
+Full mapping guides and a runnable LangGraph example: [`spec/framework-interop.md`](spec/framework-interop.md) · [`examples/runners/langgraph/`](examples/runners/langgraph/)
 
 ---
 
-## Getting started
+## Get started
 
 ```bash
-# Validate all schemas and run the conformance harness
-PYTHON_BIN=python3 bash scripts/validate.sh
+PYTHON_BIN=python3 bash scripts/validate.sh   # validate all schemas + conformance harness
 ```
 
 ```python
@@ -84,12 +87,12 @@ from adp_sdk.adp_model import ADP
 from adp_sdk.validation import validate_adp, validate_adp_semantics
 
 adp = ADP.from_file("examples/acme-analytics/adp/agent.yaml")
-validate_adp(adp)            # schema + conformance_class enforcement
-validate_adp_semantics(adp)  # cross-ref check: edges, model_ref, runtime_ref
+validate_adp(adp)            # schema + conformance_class check
+validate_adp_semantics(adp)  # edge refs, model_ref, runtime_ref
 ```
 
 ```bash
-# LangGraph round-trip integration tests
+# LangGraph round-trip — ADP → LangGraph → ADP
 cd examples/runners/langgraph
 pip install -r requirements.txt && pip install -e ../../../sdk/python
 pytest -v
@@ -103,7 +106,7 @@ pytest -v
 flowchart TD
     A["Authoring tools & frameworks\nLangGraph · AutoGen · CrewAI · Semantic Kernel"]
     B["ADP manifest + ADPKG\n— this spec —"]
-    C["Runners · platforms · CI pipelines"]
+    C["Runners · platforms · CI"]
     D["MCP · A2A · OTel · OCI"]
 
     A <-->|"export / import"| B
@@ -111,7 +114,7 @@ flowchart TD
     B -.->|"references"| D
 ```
 
-ADP references existing protocols rather than replacing them. MCP handles tool transport, A2A handles agent-to-agent calls, OCI handles packaging. ADP is the manifest that says which of those an agent uses and how.
+ADP references existing protocols — it doesn't replace them. MCP handles tool transport. A2A handles agent-to-agent communication. OCI handles packaging. ADP is the manifest that wires them together.
 
 ---
 
@@ -121,7 +124,7 @@ ADP references existing protocols rather than replacing them. MCP handles tool t
 |---|---|---|
 | **ADP spec** | Identity, runtime, flow, evaluation, governance | [`spec/adp-v0.1.0.md`](spec/adp-v0.1.0.md) |
 | **Execution Semantics (ESP)** | Per-node state rules (D1–D7), condition expressions | [`spec/esp.md`](spec/esp.md) |
-| **Runtime-flow binding** | Backend selection, `runtime_ref` resolution | [`spec/runtime-flow-binding.md`](spec/runtime-flow-binding.md) |
+| **Runtime-flow binding** | Backend compatibility matrix, `runtime_ref` resolution | [`spec/runtime-flow-binding.md`](spec/runtime-flow-binding.md) |
 | **Framework interop guide** | LangGraph / AutoGen / SK / CrewAI mapping | [`spec/framework-interop.md`](spec/framework-interop.md) |
 | **JSON Schemas** | 6 schemas, hosted on GitHub Pages | [`schemas/`](schemas/) |
 | **SDKs** | validate / pack / unpack — Python · TS · Rust · Go | [`sdk/`](sdk/) |
