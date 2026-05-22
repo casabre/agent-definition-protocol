@@ -1,0 +1,55 @@
+adp_version: "0.2.0"
+id: "agent.platform.base"
+name: "Platform Base Agent"
+description: "Shared base used by all product agents. Defines runtime, guardrails, telemetry, and safety evaluation."
+conformance_class: "full"
+
+runtime:
+  execution:
+    - id: "python-backend"
+      backend: "python"
+      entrypoint: "agents.main:app"
+  models:
+    - id: "gpt4"
+      provider: "openai"
+      model: "gpt-4o"
+
+flow:
+  id: "platform.base.flow"
+  graph:
+    nodes:
+      - { id: "input",  kind: "input" }
+      - { id: "output", kind: "output" }
+    edges: []
+    start_nodes: ["input"]
+    end_nodes:   ["output"]
+
+guardrails:
+  input:
+    - id: "pii-filter"
+      provider: "guardrails-ai"
+      policy_ref: "./policies/pii.rail"
+      mode: "block"
+  on_violation: "block"
+
+telemetry:
+  endpoint: "https://otel.platform.example/v1"
+  protocol: "http/protobuf"
+  service_name: "platform-agent"
+  required_attributes:
+    - "gen_ai.system"
+    - "gen_ai.request.model"
+    - "gen_ai.usage.input_tokens"
+    - "gen_ai.usage.output_tokens"
+
+evaluation:
+  suites:
+    - id: "safety"
+      description: "Platform-wide safety checks"
+      metrics:
+        - id: "safety-judge"
+          type: "llm_judge"
+          threshold: 0.9
+  promotion_policy:
+    require_passing_suites: ["safety"]
+    blocking: true

@@ -43,6 +43,25 @@ This document tracks readiness for AAIF (AI Agent Interoperability Foundation) s
 | Router state-write contradiction fixed | Done | `scripts/esp-conformance-fixtures.yaml`, `spec/esp.md §router` |
 | `runtime_ref` negative fixture + tests | Done | `fixtures/semantic/sem_neg_runtime_ref.yaml`, all 4 SDKs |
 
+## v0.2.0 Additions (Done)
+
+| Addition | Status | Location |
+|----------|--------|----------|
+| Composition spec (extends/import/overrides) | Done | `spec/adp-v0.2.0.md §Composition` |
+| Guardrails formalization | Done | `spec/adp-v0.2.0.md §Guardrails`, `schemas/adp.schema.json` |
+| Telemetry section (OTel gen_ai.*) | Done | `spec/adp-v0.2.0.md §Telemetry`, `schemas/adp.schema.json` |
+| Tool auth declarations | Done | `spec/adp-v0.2.0.md §Tool Authentication`, `schemas/adp.schema.json` |
+| Compliance posture | Done | `spec/adp-v0.2.0.md §Compliance Posture`, `schemas/adp.schema.json` |
+| `resolve_adp()` / composition in all 4 SDKs | Done | `sdk/*/composition.*` |
+| Semantic validation checks 7–11 in all 4 SDKs | Done | `sdk/*/validation.*` |
+| Subflow D8 semantics | Done | `spec/esp.md §subflow`, `scripts/esp-conformance-fixtures.yaml` |
+| `promotion_policy.blocking` normative | Done | `schemas/evaluation.schema.json`, `spec/adp-v0.2.0.md §VI` |
+| `tool_ref` normative | Done | `schemas/flow.schema.json`, `spec/adp-v0.2.0.md §VI` |
+| `schemas/adp-module.schema.json` | Done | `schemas/adp-module.schema.json` |
+| Multi-framework runner examples (4 frameworks) | Done | `examples/runners/` |
+| Composition fixtures + examples | Done | `fixtures/composition/`, `examples/composition/` |
+| 8-scenario ESP conformance harness | Done | `scripts/esp-runner-harness.py`, `scripts/esp-conformance-fixtures.yaml` |
+
 ## v0.1.1 Additions (Done)
 
 | Addition | Status | Location |

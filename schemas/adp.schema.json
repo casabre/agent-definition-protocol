@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://casabre.github.io/agent-definition-protocol/schemas/adp.schema.json",
-  "title": "Agent Definition Protocol v0.1.0",
+  "title": "Agent Definition Protocol v0.2.0",
   "type": "object",
   "required": ["adp_version", "id", "runtime", "flow", "evaluation"],
   "properties": {
-    "adp_version": {"type": "string", "enum": ["0.1.0"], "$comment": "0.2.0 will be added when the v0.2.0 spec is published"},
+    "adp_version": {"type": "string", "enum": ["0.1.0", "0.2.0", "0.3.0"]},
     "id": {"type": "string", "minLength": 1},
     "name": {"type": "string"},
     "description": {"type": "string"},
@@ -39,10 +39,57 @@
           "input_modes": {"type": "array", "items": {"type": "string"}},
           "output_modes": {"type": "array", "items": {"type": "string"}},
           "examples": {"type": "array", "items": {"type": "string"}},
-          "tags": {"type": "array", "items": {"type": "string"}}
+          "tags": {"type": "array", "items": {"type": "string"}},
+          "visibility": {
+            "type": "string",
+            "enum": ["public", "authenticated"],
+            "default": "public",
+            "description": "public: appears in the public A2A agent card. authenticated: appears only in the authenticated extension card."
+          }
         },
         "additionalProperties": true
       }
+    },
+    "subagents": {
+      "type": "array",
+      "description": "Catalog of sub-agent references this agent can delegate to.",
+      "items": {
+        "type": "object",
+        "required": ["id", "ref"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "ref": { "type": "string", "description": "URI or relative path to the sub-agent ADP manifest." },
+          "description": { "type": "string" },
+          "invocation_mode": { "type": "string", "enum": ["synchronous", "asynchronous"] }
+        },
+        "additionalProperties": false
+      }
+    },
+    "pipeline": {
+      "type": "object",
+      "description": "In-band processing stages. guardrails.input → pre_process → flow → post_process → guardrails.output.",
+      "properties": {
+        "pre_process": { "type": "array", "items": { "$ref": "#/definitions/pipeline_stage" } },
+        "post_process": { "type": "array", "items": { "$ref": "#/definitions/pipeline_stage" } }
+      },
+      "additionalProperties": false
+    },
+    "hooks": {
+      "type": "array",
+      "description": "Lifecycle event handlers. Fire-and-forget; do not modify the data flow.",
+      "items": { "$ref": "#/definitions/hook" }
+    },
+    "streaming": {
+      "type": "object",
+      "description": "Agent streaming policy.",
+      "properties": {
+        "enabled": { "type": "boolean", "default": false },
+        "mode": { "type": "string", "enum": ["token", "message", "event", "none"], "default": "token" },
+        "chunk_format": { "type": "string", "enum": ["text", "json", "server_sent_events"], "default": "text" },
+        "buffer_lines": { "type": "integer", "minimum": 0, "default": 0 },
+        "include_node_events": { "type": "boolean", "default": false }
+      },
+      "additionalProperties": false
     },
     "interop": {
       "type": "object",
@@ -50,8 +97,11 @@
         "a2a": {
           "type": "object",
           "properties": {
-            "ref": {"type": "string"},
-            "agentcard": {"type": "object"}
+            "ref": { "type": "string", "description": "URI or file path to an external A2A AgentCard document." },
+            "agentcard": { "type": "object", "additionalProperties": true, "$comment": "Deprecated alias for agent_card. Use agent_card (snake_case)." },
+            "card_url": { "type": "string", "format": "uri", "description": "The public URL where this agent card is served." },
+            "agent_card": { "$ref": "#/definitions/a2a_agent_card" },
+            "authenticated_extension": { "$ref": "#/definitions/a2a_authenticated_extension" }
           },
           "additionalProperties": true
         }
@@ -70,7 +120,17 @@
               "id": {"type": "string"},
               "description": {"type": "string"},
               "transport": {"type": "string"},
-              "endpoint": {"type": "string"}
+              "endpoint": {"type": "string"},
+              "auth": {
+                "type": "object",
+                "required": ["scheme"],
+                "properties": {
+                  "scheme": {"type": "string", "enum": ["bearer", "api_key", "oauth2", "mtls", "none"]},
+                  "env_var": {"type": "string"},
+                  "scopes": {"type": "array", "items": {"type": "string"}}
+                },
+                "additionalProperties": false
+              }
             },
             "additionalProperties": false
           }
@@ -84,7 +144,16 @@
               "id": {"type": "string"},
               "description": {"type": "string"},
               "base_url": {"type": "string"},
-              "auth": {"type": "string"}
+              "auth": {
+                "type": "object",
+                "required": ["scheme"],
+                "properties": {
+                  "scheme": {"type": "string", "enum": ["bearer", "api_key", "oauth2", "mtls", "none"]},
+                  "env_var": {"type": "string"},
+                  "scopes": {"type": "array", "items": {"type": "string"}}
+                },
+                "additionalProperties": false
+              }
             },
             "additionalProperties": false
           }
@@ -98,7 +167,17 @@
               "id": {"type": "string"},
               "description": {"type": "string"},
               "connection": {"type": "string"},
-              "schema": {"type": "string"}
+              "schema": {"type": "string"},
+              "auth": {
+                "type": "object",
+                "required": ["scheme"],
+                "properties": {
+                  "scheme": {"type": "string", "enum": ["bearer", "api_key", "oauth2", "mtls", "none"]},
+                  "env_var": {"type": "string"},
+                  "scopes": {"type": "array", "items": {"type": "string"}}
+                },
+                "additionalProperties": false
+              }
             },
             "additionalProperties": false
           }
@@ -117,13 +196,44 @@
       "additionalProperties": false
     },
     "guardrails": {
-      "$comment": "Forward-declared for v0.2.0; accepted but not formally specified in v0.1.0",
       "type": "object",
+      "description": "Guardrail declarations for input/output filtering. Formalized in v0.2.0.",
       "properties": {
-        "policies": {"type": "array", "items": {"type": "string"}},
-        "telemetry_endpoint": {"type": "string"}
+        "input": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "provider", "policy_ref"],
+            "properties": {
+              "id": {"type": "string", "minLength": 1},
+              "provider": {"type": "string"},
+              "policy_ref": {"type": "string"},
+              "mode": {"type": "string", "enum": ["block", "flag", "redact", "log"]},
+              "categories": {"type": "array", "items": {"type": "string"}},
+              "threshold": {"type": "string", "enum": ["low", "medium", "high"]}
+            },
+            "additionalProperties": false
+          }
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "provider", "policy_ref"],
+            "properties": {
+              "id": {"type": "string", "minLength": 1},
+              "provider": {"type": "string"},
+              "policy_ref": {"type": "string"},
+              "mode": {"type": "string", "enum": ["block", "flag", "redact", "log"]},
+              "categories": {"type": "array", "items": {"type": "string"}},
+              "threshold": {"type": "string", "enum": ["low", "medium", "high"]}
+            },
+            "additionalProperties": false
+          }
+        },
+        "on_violation": {"type": "string", "enum": ["block", "log"]}
       },
-      "additionalProperties": true
+      "additionalProperties": false
     },
     "evaluation": {"$ref": "evaluation.schema.json"},
     "kpis": {
@@ -148,8 +258,67 @@
         "identity": {"type": "string"},
         "allowed_data_scopes": {"type": "array", "items": {"type": "string"}},
         "forbidden_data_scopes": {"type": "array", "items": {"type": "string"}},
-        "telemetry_endpoint": {"type": "string", "format": "uri"},
-        "guardrail_policy_set": {"type": "string"}
+        "telemetry_endpoint": {
+          "type": "string",
+          "format": "uri",
+          "$comment": "Deprecated in v0.2.0; use top-level telemetry section. Will be removed in v0.3.0."
+        },
+        "guardrail_policy_set": {"type": "string"},
+        "compliance": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["standard"],
+            "properties": {
+              "standard": {"type": "string", "minLength": 1}
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "extends": {
+      "type": "string",
+      "description": "URI of a base ADP manifest. Merged using RFC 7396 JSON Merge Patch before local fields."
+    },
+    "import": {
+      "type": "array",
+      "description": "Modules to import additively (arrays appended, objects deep-merged). Applied after extends, before local fields.",
+      "items": {
+        "type": "object",
+        "required": ["id", "from"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "from": {"type": "string"},
+          "sections": {"type": "array", "items": {"type": "string"}}
+        },
+        "additionalProperties": false
+      }
+    },
+    "overrides": {
+      "type": "array",
+      "description": "RFC 6901 JSON Pointer patches applied last, after extends, imports, and local fields.",
+      "items": {
+        "type": "object",
+        "required": ["path"],
+        "properties": {
+          "path": {"type": "string"},
+          "value": {},
+          "op": {"type": "string", "enum": ["set", "delete", "append"]}
+        },
+        "additionalProperties": false
+      }
+    },
+    "telemetry": {
+      "type": "object",
+      "description": "OpenTelemetry configuration. Replaces deprecated governance.telemetry_endpoint.",
+      "properties": {
+        "endpoint": {"type": "string"},
+        "protocol": {"type": "string", "enum": ["grpc", "http/protobuf", "http/json"]},
+        "service_name": {"type": "string"},
+        "sampling_rate": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+        "required_attributes": {"type": "array", "items": {"type": "string"}}
       },
       "additionalProperties": false
     },
@@ -170,7 +339,154 @@
         }
       },
       "additionalProperties": false
+    },
+    "x_testing": {
+      "$comment": "ADP Testing extension (preview). Will be promoted to top-level 'testing' in v0.3.0. Validate x_testing content against schemas/testing.schema.json.",
+      "type": "object",
+      "additionalProperties": true
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "definitions": {
+    "pipeline_stage": {
+      "type": "object",
+      "required": ["id", "type"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "type": { "type": "string", "enum": ["function", "script", "json_schema"] },
+        "function_ref": { "type": "string" },
+        "runtime": { "type": "string", "enum": ["python", "bash", "javascript"] },
+        "inline": { "type": "string" },
+        "script_ref": { "type": "string" },
+        "schema": { "type": "object", "additionalProperties": true },
+        "schema_ref": { "type": "string" },
+        "on_error": { "type": "string", "enum": ["fail", "warn", "skip"] }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        { "if": {"properties": {"type": {"const": "function"}}, "required": ["type"]}, "then": {"required": ["function_ref"]} },
+        { "if": {"properties": {"type": {"const": "script"}}, "required": ["type"]}, "then": {"anyOf": [{"required": ["inline"]}, {"required": ["script_ref"]}]} },
+        { "if": {"properties": {"type": {"const": "json_schema"}}, "required": ["type"]}, "then": {"anyOf": [{"required": ["schema"]}, {"required": ["schema_ref"]}]} }
+      ]
+    },
+    "hook": {
+      "type": "object",
+      "required": ["event", "handler"],
+      "properties": {
+        "event": { "type": "string", "enum": ["on_invoke_start", "on_invoke_end", "on_node_start", "on_node_end", "on_stream_start", "on_stream_chunk", "on_stream_end", "on_error"] },
+        "node_filter": { "type": "array", "items": { "type": "string" }, "description": "Limit hook to these node IDs. Only applicable to on_node_start/on_node_end." },
+        "handler": { "$ref": "#/definitions/hook_handler" },
+        "on_error": { "type": "string", "enum": ["log", "fail", "skip"] }
+      },
+      "additionalProperties": false
+    },
+    "hook_handler": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "enum": ["function", "script"] },
+        "function_ref": { "type": "string" },
+        "runtime": { "type": "string", "enum": ["python", "bash", "javascript"] },
+        "inline": { "type": "string" },
+        "script_ref": { "type": "string" }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        { "if": {"properties": {"type": {"const": "function"}}, "required": ["type"]}, "then": {"required": ["function_ref"]} },
+        { "if": {"properties": {"type": {"const": "script"}}, "required": ["type"]}, "then": {"anyOf": [{"required": ["inline"]}, {"required": ["script_ref"]}]} }
+      ]
+    },
+    "a2a_agent_card": {
+      "type": "object",
+      "required": ["name", "url", "version"],
+      "description": "A2A-protocol public AgentCard.",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "url": { "type": "string", "format": "uri" },
+        "version": { "type": "string" },
+        "documentation_url": { "type": "string", "format": "uri" },
+        "provider": {
+          "type": "object",
+          "properties": { "organization": { "type": "string" }, "url": { "type": "string", "format": "uri" } },
+          "additionalProperties": false
+        },
+        "capabilities": {
+          "type": "object",
+          "properties": {
+            "streaming": { "type": "boolean" },
+            "push_notifications": { "type": "boolean" },
+            "state_transition_history": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        },
+        "authentication": { "$ref": "#/definitions/a2a_authentication" },
+        "default_input_modes": { "type": "array", "items": { "type": "string" } },
+        "default_output_modes": { "type": "array", "items": { "type": "string" } },
+        "skills": { "type": "array", "items": { "$ref": "#/definitions/a2a_skill" } }
+      },
+      "additionalProperties": false
+    },
+    "a2a_authenticated_extension": {
+      "type": "object",
+      "description": "Delta over the public agent card. Arrays are additive; scalars override.",
+      "properties": {
+        "capabilities": {
+          "type": "object",
+          "properties": {
+            "streaming": { "type": "boolean" },
+            "push_notifications": { "type": "boolean" },
+            "state_transition_history": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        },
+        "authentication": { "$ref": "#/definitions/a2a_authentication" },
+        "default_input_modes": { "type": "array", "items": { "type": "string" } },
+        "default_output_modes": { "type": "array", "items": { "type": "string" } },
+        "skills": { "type": "array", "items": { "$ref": "#/definitions/a2a_skill" } },
+        "push_notification_config": {
+          "type": "object",
+          "properties": {
+            "endpoint": { "type": "string", "format": "uri" },
+            "auth_scheme": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "a2a_authentication": {
+      "type": "object",
+      "required": ["schemes"],
+      "properties": {
+        "schemes": { "type": "array", "items": { "type": "string" } },
+        "credentials": { "type": "string" },
+        "oauth2": {
+          "type": "object",
+          "properties": {
+            "authorization_url": { "type": "string", "format": "uri" },
+            "token_url": { "type": "string", "format": "uri" },
+            "scopes": { "type": "array", "items": { "type": "string" } }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": true
+    },
+    "a2a_skill": {
+      "type": "object",
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "examples": { "type": "array", "items": { "type": "string" } },
+        "input_modes": { "type": "array", "items": { "type": "string" } },
+        "output_modes": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    }
+  }
 }

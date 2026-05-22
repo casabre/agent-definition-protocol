@@ -1,0 +1,30 @@
+adp_version: "0.2.0"
+id: "fixture.comp.base"
+conformance_class: "full"
+
+runtime:
+  execution:
+    - { id: "python-backend", backend: "python", entrypoint: "agents.main:app" }
+  models:
+    - { id: "gpt4", provider: "openai", model: "gpt-4o-mini" }
+
+flow:
+  id: "fixture.comp.base.flow"
+  graph:
+    nodes:
+      - { id: "input",  kind: "input" }
+      - { id: "output", kind: "output" }
+    edges: []
+    start_nodes: ["input"]
+    end_nodes:   ["output"]
+
+guardrails:
+  input:
+    - { id: "pii", provider: "guardrails-ai", policy_ref: "./policies/pii.rail", mode: "block" }
+  on_violation: "block"
+
+evaluation:
+  suites:
+    - id: "safety"
+      metrics:
+        - { id: "safety-judge", type: "llm_judge", threshold: 0.9 }

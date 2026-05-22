@@ -1,0 +1,36 @@
+# fixtures/testing_checkers.yaml — positive fixture: all evaluator types + all checker types
+x_testing:
+  evaluators:
+    - id: "judge-1"
+      type: "llm_judge"
+      model: "gpt-4o-mini"
+      system_prompt: "Does the output contain a valid result? Answer with a score from 0.0 to 1.0."
+      threshold: 0.8
+    - id: "script-eval"
+      type: "script"
+      runtime: "python"
+      inline: |
+        def evaluate(output, context):
+            return {"passed": bool(output.get("result")), "score": 1.0, "reason": "has result"}
+    - id: "fn-eval"
+      type: "deterministic"
+      function_ref: "builtins:bool"
+  checkers:
+    - id: "output-schema"
+      type: "json_schema"
+      schema:
+        type: object
+        required: [result, status]
+    - id: "no-pii-leak"
+      type: "regex"
+      pattern: "\\b\\d{3}-\\d{2}-\\d{4}\\b"
+      invert: true
+    - id: "custom-validator"
+      type: "script"
+      runtime: "python"
+      inline: |
+        def check(output):
+            return isinstance(output.get("result"), str) and len(output["result"]) > 0
+  parameters:
+    max_concurrency: 2
+    timeout_per_scenario_ms: 10000

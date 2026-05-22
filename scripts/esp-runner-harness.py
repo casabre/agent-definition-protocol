@@ -2,7 +2,7 @@
 """
 ESP Runner Conformance Harness
 
-Validates the esp-conformance-fixtures.yaml format and ADR D1–D7 compliance
+Validates the esp-conformance-fixtures.yaml format and ADR D1–D8 compliance
 in --dry-run mode, or runs scenarios against a real runner via --adapter.
 
 Usage:
@@ -20,7 +20,7 @@ from pathlib import Path
 import yaml
 
 FIXTURES_PATH = Path(__file__).parent / "esp-conformance-fixtures.yaml"
-REQUIRED_NODE_KINDS = {"input", "llm", "tool", "router", "retriever", "evaluator", "output"}
+REQUIRED_NODE_KINDS = {"input", "llm", "tool", "router", "retriever", "evaluator", "output", "subflow"}
 REQUIRED_SCENARIO_KEYS = {
     "id", "node_kind", "description", "manifest_fragment",
     "invocation", "expected_state_transitions", "expected_output",
@@ -173,6 +173,22 @@ def check_adr_rules(scenarios: list[dict]) -> list[str]:
                     f"[D7] output scenario '{sid}': expected_output must be non-null"
                 )
 
+        elif kind == "subflow":
+            subflow_node_id = _find_node_id_by_kind(s, "subflow")
+            for t in transitions:
+                if t.get("after_node") == subflow_node_id:
+                    context = t.get("state", {}).get("context", {})
+                    if subflow_node_id not in context:
+                        errors.append(
+                            f"[D8] subflow scenario '{sid}': state.context['{subflow_node_id}'] "
+                            f"must exist after subflow fires"
+                        )
+                    elif not isinstance(context.get(subflow_node_id), dict):
+                        errors.append(
+                            f"[D8] subflow scenario '{sid}': state.context['{subflow_node_id}'] "
+                            f"must be an object"
+                        )
+
     return errors
 
 
@@ -185,7 +201,7 @@ def run_dry(scenarios: list[dict]) -> int:
         for e in all_errors:
             print(f"ERROR: {e}", file=sys.stderr)
         return 1
-    print(f"OK: --dry-run passed ({len(scenarios)} scenarios, all ADR D1–D7 rules satisfied)")
+    print(f"OK: --dry-run passed ({len(scenarios)} scenarios, all ADR D1–D8 rules satisfied)")
     return 0
 
 

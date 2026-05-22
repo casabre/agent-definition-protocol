@@ -1,0 +1,23 @@
+adp_version: "0.2.0"
+id: "sem.neg.tool.ref.missing"
+conformance_class: "full"
+runtime:
+  execution:
+    - { id: "py", backend: "python", entrypoint: "app:main" }
+flow:
+  id: "test.flow"
+  graph:
+    nodes:
+      - { id: "input",     kind: "input" }
+      - { id: "api-call",  kind: "tool",   tool_ref: "nonexistent-api" }
+      - { id: "output",    kind: "output" }
+    edges:
+      - { from: "input",    to: "api-call" }
+      - { from: "api-call", to: "output"   }
+    start_nodes: ["input"]
+    end_nodes:   ["output"]
+evaluation:
+  suites:
+    - id: "basic"
+      metrics:
+        - { id: "m", type: "deterministic", threshold: 1.0 }

@@ -1,0 +1,34 @@
+adp_version: "0.2.0"
+id: "agent.acme.billing"
+name: "Acme Billing Agent"
+description: >
+  Product billing agent. Extends platform base (inherits guardrails, telemetry, safety eval).
+  Adds billing-specific flow and tools.
+extends: "./base-agent.yaml"
+
+# evaluation key intentionally omitted — inherits base safety evaluation via RFC 7396.
+# DO NOT add `evaluation: {}` — that would replace the inherited evaluation with an empty object.
+
+flow:
+  id: "acme.billing.flow"
+  graph:
+    nodes:
+      - { id: "input",   kind: "input" }
+      - { id: "lookup",  kind: "tool",   tool_ref: "billing-api" }
+      - { id: "respond", kind: "llm",    model_ref: "gpt4" }
+      - { id: "output",  kind: "output", output_ref: "context.respond.content" }
+    edges:
+      - { from: "input",   to: "lookup"  }
+      - { from: "lookup",  to: "respond" }
+      - { from: "respond", to: "output"  }
+    start_nodes: ["input"]
+    end_nodes:   ["output"]
+
+tools:
+  http_apis:
+    - id: "billing-api"
+      description: "Acme billing service REST API"
+      base_url: "https://billing.acme.example"
+      auth:
+        scheme: "bearer"
+        env_var: "BILLING_API_TOKEN"

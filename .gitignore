@@ -24,3 +24,10 @@ sdk/rust/target/
 sdk/go/coverage.out
 
 reports/
+
+# Local tooling
+.codegraph/
+.claude/
+
+# TypeScript compiled test artifacts
+sdk/typescript/test/*.js

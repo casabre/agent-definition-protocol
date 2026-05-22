@@ -577,9 +577,25 @@ Run result ← `state.context["chat-llm"]["content"]`.
 
 ### `subflow` node
 
-> **Status**: Deferred to v0.2.0. Subflow node semantics are not specified in v0.1.0.
->
-> The `subflow` kind is accepted by the schema to allow forward-compatible manifests, but runners SHOULD reject subflow nodes with a clear error rather than silently ignoring them until the semantics are finalized.
+**D8** — A `subflow` node invokes a nested ADP graph and writes its result to the parent state.
+
+**Reference modes** (exactly one MUST be present):
+- `flow_ref` (string): References an inline flow section within the same manifest.
+- `adp_ref` (string): References an external ADP manifest by `id`. Runners MUST resolve the manifest before graph construction.
+
+**State contract:**
+
+| Aspect | Rule |
+|--------|------|
+| Inputs | Subflow receives the full parent `state` at the point of invocation as its initial inputs |
+| Output | Result is written to `state.context[<subflow_node_id>]` as an object |
+| Isolation | Subflow's internal `context` and `tool_responses` are NOT visible to the parent |
+| Error propagation | If the subflow fails, the parent runner MUST propagate the error; MUST NOT continue past the subflow node |
+| State write | The runner MUST write to `state.context[<subflow_node_id>]` exactly once; subsequent traversals of the same subflow node MUST overwrite the previous value |
+
+**Relationship to D-rules:** D8 does not supersede D1–D7. The subflow's internal nodes execute under D1–D7 semantics. D8 governs only the parent-subflow boundary.
+
+Full subflow input/output field mapping (selective state injection via `inputs_from` / `outputs_to`) is deferred to v0.3.0.
 
 ## Tool Binding Semantics
 

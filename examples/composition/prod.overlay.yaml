@@ -1,0 +1,12 @@
+adp_version: "0.2.0"
+id: "agent.acme.billing"
+description: "Production overlay: upgrades model to gpt-4o, sets APP_ENV=prod."
+extends: "./billing-variant.yaml"
+
+overrides:
+  - path: "/runtime/models/0/model"
+    value: "gpt-4o"
+    op: "set"
+  - path: "/telemetry/service_name"
+    value: "acme-billing-prod"
+    op: "set"

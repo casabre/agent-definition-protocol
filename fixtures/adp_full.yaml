@@ -1,10 +1,32 @@
-adp_version: "0.1.0"
+adp_version: "0.3.0"
 id: "fixture.acme.full"
 runtime:
   execution:
     - backend: "python"
       id: "py"
       entrypoint: "agent.main:app"
+  models:
+    - id: "primary"
+      provider: "openai"
+      model: "gpt-4o"
+      seed: 42
+      top_p: 0.9
+      timeout_ms: 30000
+      use_streaming_api: false
+      stop_sequences: ["<|end|>"]
+      structured_output:
+        format: "json_schema"
+        schema:
+          type: object
+          required: [answer, confidence]
+  adapter_hints:
+    langgraph:
+      recursion_limit: 25
+      stream_mode: "updates"
+      checkpointer: "none"
+    autogen:
+      max_turns: 10
+      human_input_mode: "NEVER"
 flow:
   id: "fixture.flow"
   graph:
@@ -16,6 +38,57 @@ flow:
     edges: []
     start_nodes: ["input"]
     end_nodes: ["output"]
+skills:
+  - id: "answer"
+    name: "Answer questions"
+    description: "Provide answers using the agent."
+    input_modes: ["text"]
+    output_modes: ["text"]
+    visibility: "authenticated"
+subagents:
+  - id: "billing-sub"
+    ref: "examples/composition/base-agent.yaml"
+    description: "Billing sub-agent"
+    invocation_mode: "synchronous"
+streaming:
+  enabled: true
+  mode: "token"
+  chunk_format: "server_sent_events"
+  include_node_events: false
+  buffer_lines: 0
+interop:
+  a2a:
+    ref: "./docs/agentcard.json"
+    card_url: "https://agents.acme.example/.well-known/agent.json"
+    agent_card:
+      name: "Fixture Acme Full Agent"
+      url: "https://agents.acme.example/fixture-full"
+      version: "0.3.0"
+pipeline:
+  pre_process:
+    - id: "normalize-input"
+      type: "function"
+      function_ref: "acme.transforms:normalize_query"
+      on_error: "fail"
+  post_process:
+    - id: "format-output"
+      type: "script"
+      runtime: "python"
+      inline: |
+        def process(data):
+            return {"result": data.get("content", "").strip(), "version": "1.0"}
+      on_error: "warn"
+hooks:
+  - event: "on_node_end"
+    node_filter: ["output"]
+    handler:
+      type: "function"
+      function_ref: "acme.observability:record_llm_call"
+    on_error: "log"
+  - event: "on_error"
+    handler:
+      type: "function"
+      function_ref: "acme.alerting:notify"
 evaluation:
   suites:
     - id: "suite1"

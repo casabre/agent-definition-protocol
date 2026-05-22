@@ -1,0 +1,26 @@
+adp_version: "0.3.0"
+id: "agent.test.subagent-ref"
+runtime:
+  execution:
+    - id: "python-exec"
+      backend: "python"
+      entrypoint: "main.py"
+  models:
+    - id: "gpt-4o"
+      provider: "openai"
+      model: "gpt-4o"
+flow:
+  graph:
+    nodes:
+      - id: "delegate"
+        kind: "subflow"
+        adp_ref: "nonexistent-catalog-id"
+    edges: []
+    start_nodes: ["delegate"]
+    end_nodes: ["delegate"]
+evaluation:
+  suites:
+    - id: "basic"
+      metrics:
+        - id: "acc"
+          type: "deterministic"

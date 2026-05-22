@@ -4,87 +4,70 @@ This document outlines current versioning, a high-level perspective from submiss
 
 ---
 
-## Current state (versioning and features)
+## Current state (v0.2.0)
 
-| Area                                    | Version / status                                                                               |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| **ADP manifest**                        | v0.1.0 spec; schema validates `adp_version` 0.1.0 only (0.2.0 enum entry added when v0.2.0 spec is published) |
-| **ESP (Execution Semantics Profile)**   | v0.2.0; framework-neutral execution contract for runners                                       |
-| **Runtime / flow / evaluation schemas** | Published; v0.1.0 titles; `models[]` field forward-declared for v0.2.0                         |
-| **ADPKG (OCI packaging)**               | Spec in `spec/adpkg-oci.md`; provenance/signing guidance                                       |
-| **Conformance**                         | `spec/conformance.md`: ADP-Minimal, ADP-Full, ESP-conformant runners; fixtures and validate.sh |
-| **SDKs**                                | Python, TypeScript, Rust, Go: validate, pack, unpack, inspect                                  |
-| **Governance / provenance**             | Normative prose and roadmap in `spec/governance-provenance.md`; full tooling TBD               |
-
-Composition (extends/import/overrides) is **not** yet specified; see section below.
+| Area | Version / status |
+|------|-----------------|
+| **ADP manifest** | v0.2.0 spec (`spec/adp-v0.2.0.md`); schema accepts `0.1.0` and `0.2.0` |
+| **Composition** | `extends` (RFC 7396), `import` (additive), `overrides` (RFC 6901) — specified and implemented in all 4 SDKs |
+| **Guardrails** | Formalized schema with provider/policy_ref/mode; runner enforcement semantics specified |
+| **Telemetry** | Top-level `telemetry` section with OTel gen_ai.* required_attributes; `governance.telemetry_endpoint` deprecated |
+| **Tool auth** | `auth` objects on all tool types; `env_var`-based secret resolution |
+| **Compliance** | `governance.compliance[]` array for GDPR/HIPAA/SOC2/EU-AI-Act/ISO-27001/FedRAMP |
+| **Subflow D8** | Basic semantics specified: inputs=parent state, output→`state.context[node.id]`, isolation |
+| **ESP** | v0.2.0; D1–D8 complete; 8-scenario conformance harness |
+| **Frameworks** | LangGraph (round-trip), AutoGen, CrewAI, Semantic Kernel runner examples |
+| **SDKs** | Python, TypeScript, Rust, Go: validate, pack, unpack, resolve_adp, checks 7–11 |
 
 ---
 
 ## Perspective: submission → review → 1.0
 
-High-level path from foundation submission to a stable 1.0:
-
 1. **Submission ([Agentic AI Foundation](https://aaif.io))**  
-   Submit ADP + ESP as a draft specification (e.g. sandbox or similar stage) to the [Agentic AI Foundation](https://aaif.io) for ecosystem visibility and neutral hosting.
+   Submit ADP + ESP as a draft specification to the [Agentic AI Foundation](https://aaif.io) for ecosystem visibility and neutral hosting.
 
 2. **Review draft**  
-   Address feedback from the foundation and the community; refine narrative, scope, and optional semantics (ESP); align with other agent standards (MCP, A2A, OTel) where relevant.
+   Address feedback from the foundation and community; refine narrative, scope, and optional semantics; align with MCP, A2A, and OTel where relevant.
 
-3. **Work toward 1.0**  
-   - Stabilize manifest and packaging (backward-compatibility expectations).  
-   - Complete governance and provenance specifications and reference tooling.  
-   - Publish conformance tests and, if applicable, a conformance program.  
-   - Target a v1.0.0 release with clear stability and compatibility guarantees.
-
-This perspective is indicative; actual stages and names depend on the foundation’s process.
+3. **Work toward 1.0**
+   - Stabilize manifest and packaging with backward-compatibility guarantees.
+   - Complete governance and provenance specifications and reference tooling.
+   - Publish conformance tests and conformance program.
+   - Target v1.0.0 with clear stability guarantees.
 
 ---
 
-## v0.2.0 (Planned)
+## v0.3.0 (Planned)
 
-### Composition
+### Registry protocol
 
-Composition (extends/import/overrides) is planned for a future ADP release. Do not rely on these fields for interoperability until a finalized spec and schema are published.
+`registry://` URI scheme for `extends` and `import` — resolve manifests and modules from a central registry. Includes authentication, versioning, and caching semantics.
 
-## Goals (proposed)
-- **extends**: inherit from a base ADP manifest (versioned identifier). Deep-merge semantics; local fields override inherited fields.
-- **import**: pull modules (flow, prompts, guardrails, evaluation, tools) by reference. Module content is merged into the current manifest.
-- **overrides**: patch-like updates using dotted/JSON-pointer style paths. Last writer wins.
+### Notary v2 / SPDX SBOM tooling
 
-## Proposed merge order
-1. Load base ADP (if `extends.adp` present).
-2. Apply module imports (`import.*`).
-3. Apply local document fields.
-4. Apply overrides (patch paths).
+Reference tooling for Notary v2 signing and SPDX SBOM generation. Specified as SHOULD in v0.1.x; reference implementation deferred.
 
-Conflicts resolve by last writer; invalid paths SHOULD fail validation.
+### Full subflow state mapping
 
-## Extensions (non-normative)
-- Implementers MAY add vendor-specific data under `extensions.x_<vendor>` objects in runtime/flow/evaluation to avoid collisions.
-- Extension fields SHOULD be documented and SHOULD NOT redefine core semantics.
+Selective state injection for subflow nodes: `inputs_from` and `outputs_to` fields for controlling which parent state fields are passed to the subflow and which subflow outputs are promoted to parent context. Completes D8.
 
-## Validation (future)
-- Referenced modules/ADPs must resolve and validate against schemas.
-- Overrides must target existing or whitelisted paths.
-- Merged result must satisfy ADP schema.
+### `governance.telemetry_endpoint` removal
 
-## Ignore-safe behavior
-- Current validators SHOULD ignore composition fields (extends/import/overrides) without failing, while emitting warnings, until a normative schema is published.
+Deprecated in v0.2.0; removed in v0.3.0. Use top-level `telemetry.endpoint` instead.
 
-## Status
-- Placeholder only; no schema or tooling support is provided yet.
+### AutoGen v0.4+ (autogen-agentchat) mapping
 
-### Enhanced Governance
+The v0.2.0 AutoGen runner targets the v0.2 legacy API (ConversableAgent). v0.3.0 will add a mapping guide and runner example for `autogen-agentchat` (v0.4+).
 
-Formal governance features are planned for v0.2.0:
+### Framework export (framework → ADP)
 
-- **Guardrails Schema**: Formalize policy references and enforcement modes
-- **Data Scopes**: Formalize data domain taxonomy and access logging
-- **Telemetry Requirements**: Define required OTel resource attributes
-- **Security Models**: Tool authentication schemes and secret handling
-- **Privacy**: PII handling posture and compliance requirements
+AutoGen, CrewAI, and SK runners are import-only in v0.2.0. Export (framework → ADP) requires framework-specific introspection APIs. v0.3.0 will evaluate and implement where feasible.
 
-See `spec/governance-provenance.md` for current status and roadmap details.
+### A2A agent card full integration
+
+Stubs present in v0.1.x; full A2A agent card alignment deferred to v0.3.0.
+
+---
 
 ## v1.0.0 (Future)
 

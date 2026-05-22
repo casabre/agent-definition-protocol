@@ -284,3 +284,54 @@ scenarios:
           memory: {}
           tool_responses: {}
     expected_output: "4"
+  - id: "subflow-basic"
+    node_kind: "subflow"
+    description: "D8: subflow node invokes nested graph; output written to state.context[node.id]"
+    manifest_fragment:
+      adp_version: "0.2.0"
+      id: "test.subflow"
+      conformance_class: "full"
+      runtime:
+        execution:
+          - backend: "python"
+            id: "py"
+            entrypoint: "main:app"
+      flow:
+        id: "test.subflow.flow"
+        graph:
+          nodes:
+            - id: "entry"
+              kind: "input"
+            - id: "nested"
+              kind: "subflow"
+              flow_ref: "inner-flow"
+            - id: "exit"
+              kind: "output"
+              output_ref: "context.nested"
+          edges:
+            - { from: "entry",  to: "nested" }
+            - { from: "nested", to: "exit"   }
+          start_nodes: ["entry"]
+          end_nodes:   ["exit"]
+      evaluation:
+        suites:
+          - id: "basic"
+            metrics:
+              - id: "m"
+                type: "deterministic"
+                threshold: true
+    invocation:
+      inputs:
+        query: "hello"
+    expected_state_transitions:
+      - after_node: "nested"
+        state:
+          inputs:
+            query: "hello"
+          context:
+            nested:
+              result: "subflow_result"
+          memory: {}
+          tool_responses: {}
+    expected_output:
+      result: "subflow_result"

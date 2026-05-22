@@ -1,0 +1,11 @@
+adp_version: "0.2.0"
+id: "sem.neg.guardrail.empty.policy.ref"
+conformance_class: "minimal"
+runtime:
+  execution:
+    - { id: "py", backend: "python", entrypoint: "app:main" }
+flow: {}
+evaluation: {}
+guardrails:
+  input:
+    - { id: "pii-filter", provider: "guardrails-ai", policy_ref: "" }

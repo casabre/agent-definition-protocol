@@ -1,11 +1,25 @@
-adp_version: "0.1.0"
+adp_version: "0.3.0"
 id: "acme.analytics.agent"
 name: "Acme Analytics Agent"
 description: "Multi-backend agent answering analytics questions with strong governance."
 owner: "acme-labs"
-tags: ["analytics", "acme", "v0.1.0"]
+tags: ["analytics", "acme", "v0.3.0"]
+
+subagents:
+  - id: "billing-sub"
+    ref: "../acme-analytics/adp/agent.yaml"
+    description: "Billing subagent for invoice queries"
+    invocation_mode: "synchronous"
 
 runtime:
+  adapter_hints:
+    langgraph:
+      recursion_limit: 25
+      stream_mode: "updates"
+      checkpointer: "memory"
+    autogen:
+      max_turns: 10
+      human_input_mode: "NEVER"
   execution:
     - backend: "docker"
       id: "acme-planner-container"
@@ -51,6 +65,59 @@ runtime:
       id: "acme-external-endpoint"
       type: "external-http"
       endpoint: "https://api.acme.ai/external-agent/run"
+  models:
+    - id: "primary"
+      provider: "openai"
+      model: "gpt-4o"
+      api_key_env: "OPENAI_API_KEY"
+      temperature: 0.2
+      max_tokens: 4096
+      seed: 42
+      top_p: 0.95
+      timeout_ms: 30000
+      use_streaming_api: true
+      stop_sequences: ["<|end|>"]
+      structured_output:
+        format: "json_schema"
+        schema:
+          type: object
+          required: [answer, citations]
+          properties:
+            answer: { type: string }
+            citations: { type: array, items: { type: string } }
+
+pipeline:
+  pre_process:
+    - id: "normalize-input"
+      type: "function"
+      function_ref: "acme.transforms:normalize_query"
+      on_error: "fail"
+  post_process:
+    - id: "format-output"
+      type: "script"
+      runtime: "python"
+      inline: |
+        def process(data):
+            return {"result": data.get("content", "").strip(), "version": "1.0"}
+      on_error: "warn"
+
+hooks:
+  - event: "on_node_end"
+    node_filter: ["planner", "synthesizer"]
+    handler:
+      type: "function"
+      function_ref: "acme.observability:record_llm_call"
+    on_error: "log"
+  - event: "on_error"
+    handler:
+      type: "function"
+      function_ref: "acme.alerting:notify"
+
+streaming:
+  enabled: true
+  mode: "token"
+  chunk_format: "server_sent_events"
+  include_node_events: false
 
 flow:
   id: "acme.analytics.flow"
@@ -117,7 +184,9 @@ tools:
     - id: "metrics-api"
       description: "REST API for metrics"
       base_url: "https://api.acme.example"
-      auth: "Bearer token via env METRICS_TOKEN"
+      auth:
+        scheme: "bearer"
+        env_var: "METRICS_TOKEN"
   sql_functions:
     - id: "analytics.fn_latency"
       description: "Returns latency percentiles"
@@ -130,10 +199,23 @@ memory:
   index: "telemetry"
   namespace: "default"
 
+telemetry:
+  endpoint: "https://otel.acme.example/v1"
+  protocol: "http/protobuf"
+  service_name: "acme-analytics"
+  required_attributes:
+    - "gen_ai.system"
+    - "gen_ai.request.model"
+    - "gen_ai.usage.input_tokens"
+    - "gen_ai.usage.output_tokens"
+
 guardrails:
-  policies:
-    - "https://policies.acme.example/guardrails.json"
-  telemetry_endpoint: "https://otel.acme.example/v1"
+  input:
+    - id: "pii-filter"
+      provider: "guardrails-ai"
+      policy_ref: "https://policies.acme.example/guardrails.json"
+      mode: "block"
+  on_violation: "block"
 
 evaluation:
   suites:
@@ -179,8 +261,6 @@ governance:
   identity: "spn:acme-agents/analytics"
   allowed_data_scopes: ["metrics.telemetry", "logs.sanitized"]
   forbidden_data_scopes: ["pii.raw"]
-  telemetry_endpoint: "https://otel.acme.example/v1"
-  guardrail_policy_set: "./policies/guardrails.json"
 
 deployment:
   environments:

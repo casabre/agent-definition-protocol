@@ -1,0 +1,4 @@
+semantic-kernel>=1.3
+pytest>=7.0
+pyyaml>=6.0
+# adp-sdk: install with `pip install -e ../../../sdk/python`

@@ -418,6 +418,45 @@ To claim ADP-Full conformance:
 - ✅ Package layer structure correct
 - ✅ (Recommended) Signature and SBOM support
 
+## v0.2.0 Conformance Requirements
+
+### Guardrail Enforcement
+
+A v0.2.0-conformant runner MUST:
+- Evaluate `guardrails.input[]` rails before the first flow node executes.
+- Evaluate `guardrails.output[]` rails before returning from the last flow node.
+- Return an error without executing further nodes when a `mode: "block"` rail fires on input.
+- Return an error without returning output when a `mode: "block"` rail fires on output.
+
+### `promotion_policy.blocking`
+
+A v0.2.0-conformant runner that executes evaluation suites MUST:
+- Stop and return an error when `promotion_policy.blocking: true` and any suite metric threshold is not met.
+- Not proceed to the next environment on a blocking evaluation failure.
+
+### Subflow (D8)
+
+A v0.2.0-conformant runner MUST:
+- Accept `subflow` nodes with `flow_ref` (inline) or `adp_ref` (external manifest reference).
+- Execute the subflow graph with the parent state as inputs.
+- Write the subflow result to `state.context[<subflow_node_id>]` as an object.
+- NOT expose subflow internal state to the parent.
+- Propagate subflow errors to the parent as permanent failures.
+
+### Composition Conformance Class
+
+A runner that claims **composition-conformant** status MUST implement the full `resolve_adp()` resolution order:
+1. `extends` — RFC 7396 deep-merge
+2. `import` — additive array merge
+3. Local fields — local wins
+4. `overrides` — RFC 6901 JSON Pointer patches
+5. Full validation (schema + semantics) on the merged result
+
+A composition-conformant runner MUST also:
+- Detect circular `extends` chains (depth > 10 → error).
+- Fail on unresolvable URIs before execution starts.
+- Apply the pre-composition semantic validation guard (emit WARNING rather than hard error when validating pre-resolution manifests).
+
 ## Certification
 
 **Note**: Formal certification is not yet available. This document defines self-reported conformance. Future versions may include:
@@ -427,11 +466,61 @@ To claim ADP-Full conformance:
 
 ## References
 
-- [ADP Specification](adp-v0.1.0.md)
+- [ADP v0.1.0 Specification](adp-v0.1.0.md)
+- [ADP v0.2.0 Specification](adp-v0.2.0.md)
 - [ADPKG over OCI](adpkg-oci.md)
 - [Compatibility Policy](compatibility.md)
 - [Test Fixtures](../../fixtures/)
 
 ## Status
 
-Normative for ADP v0.1.0 and ESP v0.2.0 conformance claims.
+Normative for ADP v0.1.0, v0.2.0, and ESP v0.2.0 conformance claims.
+
+---
+
+## ADP v0.3.0 Conformance
+
+### Agent Harness Layers
+
+ADP v0.3.0 provides a portable **agent harness** — framework-neutral scaffolding that wraps an agent across four layers. Conformance levels apply per layer:
+
+| Harness layer | ADP fields | Description |
+|---|---|---|
+| **Execution harness** | `runtime`, `pipeline`, `streaming` | How the agent runs and processes I/O |
+| **Observation harness** | `telemetry`, `hooks` | What can be seen happening during execution |
+| **Safety harness** | `guardrails` | What is permitted to pass through |
+| **Testing harness** | `x_testing` (`aut`, `evaluators[]`, `checkers[]`) | How the agent is tested in isolation |
+
+### v0.3.0 Optional Features
+
+All v0.3.0 features are optional for the **minimal** conformance level. A manifest that does not use any v0.3.0-exclusive fields remains valid against the v0.3.0 schema.
+
+| Feature | Field(s) | Level | Normative rule |
+|---|---|---|---|
+| Execution pipeline | `pipeline.pre_process[]`, `pipeline.post_process[]` | MAY | Runners MAY ignore pipeline stages |
+| Lifecycle hooks | `hooks[]` | MAY | Runners MAY ignore hook declarations |
+| Streaming policy (enabled) | `streaming.enabled` | **MUST** if declared | If `streaming.enabled: false` is declared, runner MUST NOT stream to caller |
+| Streaming mode | `streaming.mode` | SHOULD | Runners SHOULD map mode to framework stream API |
+| Subagents catalog | `subagents[]` | MAY | Runners MAY resolve inline or via registry |
+| Framework adapter hints | `runtime.adapter_hints` | MAY | Runners MUST ignore keys for unsupported frameworks |
+| A2A agent card (inline) | `interop.a2a.agent_card` | MAY | — |
+| A2A authenticated extension | `interop.a2a.authenticated_extension` | MAY | Runners without auth MUST serve only the public card |
+| Model extended params | `runtime.models[].top_p`, `seed`, `timeout_ms`, etc. | MAY | Runners SHOULD pass supported params to the provider |
+| Semantic check 12 | `hooks[].node_filter` validity | SHOULD | Emit error for unknown node IDs in node_filter |
+| Semantic check 13 | `subflow.adp_ref` validity | SHOULD | Emit error when adp_ref is a plain ID not in subagents[] |
+| Semantic check 14 | `evaluator_ref` validity | SHOULD | Emit error when evaluator_ref is not in x_testing.evaluators[] |
+| Unified evaluators | `x_testing.evaluators[]` | MAY | `judges[]` is a deprecated alias; runners SHOULD prefer `evaluators[]` |
+| Checkers | `x_testing.checkers[]` | MAY | Fast-fail pre-filter before evaluators |
+
+### Streaming MUST Rule
+
+`streaming.enabled: false` is the single hardest conformance requirement in v0.3.0. A runner that streams to a caller when the manifest declares `streaming.enabled: false` is **non-conformant** regardless of framework capabilities. This applies even if `runtime.models[].use_streaming_api: true` is set — that field controls the internal LLM API call only, not the agent's external streaming contract.
+
+### AUT Redesign (Breaking Change in v0.3.0 Testing Schema)
+
+The `testing.schema.json` AUT adapter type enum was reduced. `adapter.type: "http"`, `"grpc"`, `"stdio"`, `"docker"`, and `"oci"` are no longer valid in the AUT block. Test invocation for those backends is derived from `runtime.execution`. Only `"function"` and `"sdk"` remain as test-specific adapter types.
+
+Manifests that used the old AUT adapter types MUST migrate:
+- Replace `aut.adapter.type: "http"` with `aut.endpoint` (override field)
+- Remove `aut.id` (AUT is a singleton; id was removed)
+- Move `timeout_seconds` from `adapter.timeout_seconds` to `aut.timeout_seconds`

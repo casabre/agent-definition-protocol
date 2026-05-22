@@ -60,3 +60,13 @@ def test_round_trip_edge_connections(acme_manifest, mock_backend_factory):
     original_edges = {(e["from"], e["to"]) for e in acme_manifest["flow"]["graph"]["edges"]}
     recovered_edges = {(e["from"], e["to"]) for e in recovered["flow"]["graph"]["edges"]}
     assert original_edges == recovered_edges
+
+
+def test_composition_roundtrip(billing_manifest, mock_backend_factory):
+    """Composition: resolve_adp → LangGraph build → all manifest nodes present in graph."""
+    graph, node_map = build_langgraph_from_adp(billing_manifest, mock_backend_factory)
+    graph_nodes = {n for n in graph.get_graph().nodes if n not in ("__start__", "__end__")}
+    manifest_nodes = {n["id"] for n in billing_manifest["flow"]["graph"]["nodes"]}
+    assert graph_nodes == manifest_nodes, (
+        f"Composition round-trip failed: graph={graph_nodes} manifest={manifest_nodes}"
+    )

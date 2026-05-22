@@ -19,7 +19,18 @@ Suddenly you're digging through framework internals to answer basic questions â€
 
 **ADP is the OpenAPI for AI agents.** One YAML manifest declares your agent's runtime, flow graph, evaluation criteria, and packaging metadata. Frameworks and runners consume it. You move the agent without rewriting glue.
 
-> ADP is a specification, not a runtime. It defines the contract; your framework implements it.
+More precisely: ADP provides the **agent harness** â€” the portable, framework-neutral scaffolding that wraps an agent for execution, testing, and observation. Declare once, run anywhere.
+
+> ADP is a specification, not a runtime. It declares the harness; your framework implements it.
+
+### The four harness layers
+
+| Layer | ADP fields | What it provides |
+|---|---|---|
+| **Execution** | `runtime`, `pipeline`, `streaming` | How the agent runs, processes I/O, and streams |
+| **Observation** | `telemetry`, `hooks` | What can be seen during execution |
+| **Safety** | `guardrails` | What is permitted to pass through |
+| **Testing** | `x_testing` | How the agent is tested in isolation |
 
 ---
 

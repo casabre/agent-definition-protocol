@@ -1,8 +1,10 @@
+import sys
 import pytest
 import yaml
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parents[3]
+sys.path.insert(0, str(REPO_ROOT / "sdk" / "python"))
 
 
 @pytest.fixture
@@ -11,9 +13,17 @@ def acme_manifest() -> dict:
     return yaml.safe_load(path.read_text())
 
 
+@pytest.fixture(scope="session")
+def billing_manifest() -> dict:
+    """Session-scoped: resolve_adp called once; reused across all composition tests."""
+    from adp_sdk.composition import resolve_adp
+    adp = resolve_adp(REPO_ROOT / "examples" / "composition" / "billing-variant.yaml")
+    return adp.model_dump(by_alias=True, exclude_none=True)
+
+
 @pytest.fixture
 def mock_backend_factory():
-    """Inject mock callables for all node kinds — no real LLM or API calls."""
+    """Inject mock callables for all node kinds, including tool nodes with tool_ref."""
     def factory(node: dict, _runtime_entry: dict):
         node_id = node["id"]
         kind = node.get("kind", "")

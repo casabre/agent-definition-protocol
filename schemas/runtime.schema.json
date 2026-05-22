@@ -16,6 +16,46 @@
       "description": "Model configurations for LLM nodes (v0.2.0+)",
       "items": {"$ref": "#/definitions/model"},
       "minItems": 0
+    },
+    "adapter_hints": {
+      "type": "object",
+      "description": "Framework-specific configuration hints consumed by SDK integrations.",
+      "properties": {
+        "langgraph": {
+          "type": "object",
+          "properties": {
+            "recursion_limit": { "type": "integer", "minimum": 1 },
+            "stream_mode": { "type": "string", "enum": ["values", "updates", "debug"] },
+            "checkpointer": { "type": "string", "enum": ["memory", "sqlite", "postgres", "none"] }
+          },
+          "additionalProperties": true
+        },
+        "autogen": {
+          "type": "object",
+          "properties": {
+            "max_turns": { "type": "integer", "minimum": 1 },
+            "human_input_mode": { "type": "string", "enum": ["NEVER", "TERMINATE", "ALWAYS"] }
+          },
+          "additionalProperties": true
+        },
+        "crewai": {
+          "type": "object",
+          "properties": {
+            "process": { "type": "string", "enum": ["sequential", "hierarchical", "parallel"] },
+            "verbose": { "type": "boolean" },
+            "memory": { "type": "boolean" }
+          },
+          "additionalProperties": true
+        },
+        "semantic_kernel": {
+          "type": "object",
+          "properties": {
+            "execution_type": { "type": "string", "enum": ["sequential", "stepwise"] }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
     }
   },
   "additionalProperties": false,
@@ -160,7 +200,34 @@
         "base_url": {"type": "string", "format": "uri"},
         "temperature": {"type": "number"},
         "max_tokens": {"type": "integer"},
-        "extensions": {"type": "object", "additionalProperties": true}
+        "extensions": {
+          "type": "object",
+          "additionalProperties": true,
+          "$comment": "Prefer explicit fields over extensions; extensions is the fallback for provider-specific params not yet in schema"
+        },
+        "top_p": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+        "seed": {"type": "integer"},
+        "timeout_ms": {"type": "integer", "minimum": 1},
+        "use_streaming_api": {
+          "type": "boolean",
+          "description": "Call provider API in streaming mode internally (buffers tokens before returning if top-level streaming.enabled: false)"
+        },
+        "stop_sequences": {
+          "type": "array",
+          "items": {"type": "string"},
+          "maxItems": 4
+        },
+        "frequency_penalty": {"type": "number", "minimum": -2.0, "maximum": 2.0},
+        "presence_penalty": {"type": "number", "minimum": -2.0, "maximum": 2.0},
+        "structured_output": {
+          "type": "object",
+          "properties": {
+            "format": {"type": "string", "enum": ["json_object", "json_schema", "text"]},
+            "schema": {"type": "object", "additionalProperties": true},
+            "schema_ref": {"type": "string"}
+          },
+          "additionalProperties": false
+        }
       },
       "additionalProperties": false
     }

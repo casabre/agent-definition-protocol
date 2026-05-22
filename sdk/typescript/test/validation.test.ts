@@ -26,9 +26,9 @@ test("validateAdp fails on missing id", () => {
 });
 
 test("validateAdp fails on invalid adp_version", () => {
-  const errors = validateAdp({ ...valid, adp_version: "0.3.0" } as any);
+  const errors = validateAdp({ ...valid, adp_version: "9.9.9" } as any);
   expect(errors.length).toBeGreaterThan(0);
-  expect(errors.some((e: string) => e.includes("0.1.0") || e.toLowerCase().includes("version") || e.toLowerCase().includes("enum"))).toBe(true);
+  expect(errors.some((e: string) => e.includes("9.9.9") || e.toLowerCase().includes("not one of") || e.toLowerCase().includes("enum"))).toBe(true);
 });
 
 test("validateAdp passes on v0.1.0", () => {

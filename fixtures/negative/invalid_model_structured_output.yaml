@@ -1,0 +1,29 @@
+adp_version: "0.2.0"
+id: "agent.test.invalid-structured-output"
+runtime:
+  execution:
+    - id: "python-exec"
+      backend: "python"
+      entrypoint: "main.py"
+  models:
+    - id: "gpt-4o"
+      provider: "openai"
+      model: "gpt-4o"
+      structured_output:
+        format: "json_schema"
+        schema: "this-should-be-an-object-not-a-string"
+flow:
+  graph:
+    nodes:
+      - id: "chat-llm"
+        kind: "llm"
+        model_ref: "gpt-4o"
+    edges: []
+    start_nodes: ["chat-llm"]
+    end_nodes: ["chat-llm"]
+evaluation:
+  suites:
+    - id: "basic"
+      metrics:
+        - id: "acc"
+          type: "deterministic"

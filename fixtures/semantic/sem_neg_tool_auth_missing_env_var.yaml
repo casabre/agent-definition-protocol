@@ -1,0 +1,15 @@
+adp_version: "0.2.0"
+id: "sem.neg.tool.auth.missing.env.var"
+conformance_class: "minimal"
+runtime:
+  execution:
+    - { id: "py", backend: "python", entrypoint: "app:main" }
+flow: {}
+evaluation: {}
+tools:
+  http_apis:
+    - id: "billing-api"
+      description: "Billing service"
+      base_url: "https://billing.example.com"
+      auth:
+        scheme: "bearer"

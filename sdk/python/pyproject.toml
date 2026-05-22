@@ -12,7 +12,17 @@ requires-python = ">=3.11"
 dependencies = ["pydantic>=2.6", "pyyaml>=6.0", "jsonschema>=4.21"]
 
 [tool.setuptools]
-packages = ["adp_sdk"]
+packages = ["adp_sdk", "adp_sdk.integrations"]
 
 [project.optional-dependencies]
 test = ["pytest"]
+langgraph = ["langgraph>=0.2"]
+autogen = ["pyautogen>=0.4"]
+crewai = ["crewai>=0.63"]
+semantic-kernel = ["semantic-kernel>=1.3"]
+all-integrations = [
+    "langgraph>=0.2",
+    "pyautogen>=0.4",
+    "crewai>=0.63",
+    "semantic-kernel>=1.3",
+]

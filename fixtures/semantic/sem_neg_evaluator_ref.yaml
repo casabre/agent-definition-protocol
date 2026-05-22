@@ -1,0 +1,32 @@
+adp_version: "0.3.0"
+id: "agent.test.evaluator-ref"
+runtime:
+  execution:
+    - id: "python-exec"
+      backend: "python"
+      entrypoint: "main.py"
+  models:
+    - id: "gpt-4o"
+      provider: "openai"
+      model: "gpt-4o"
+flow:
+  graph:
+    nodes:
+      - id: "chat-llm"
+        kind: "llm"
+        model_ref: "gpt-4o"
+    edges: []
+    start_nodes: ["chat-llm"]
+    end_nodes: ["chat-llm"]
+evaluation:
+  suites:
+    - id: "basic"
+      metrics:
+        - id: "accuracy"
+          type: "llm_judge"
+          evaluator_ref: "nonexistent-evaluator-id"
+x_testing:
+  evaluators:
+    - id: "real-evaluator"
+      type: "llm_judge"
+      model: "gpt-4o"

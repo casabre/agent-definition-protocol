@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://casabre.github.io/agent-definition-protocol/schemas/adp-module.schema.json",
+  "title": "ADP Module v0.2.0",
+  "description": "Partial ADP manifest for use with the import directive. All fields are optional. id SHOULD be present for error messages.",
+  "type": "object",
+  "properties": {
+    "id": {"type": "string", "minLength": 1},
+    "name": {"type": "string"},
+    "description": {"type": "string"},
+    "runtime": {"$ref": "runtime.schema.json"},
+    "flow": {"$ref": "flow.schema.json"},
+    "evaluation": {"$ref": "evaluation.schema.json"},
+    "tools": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "memory": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "guardrails": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "telemetry": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "governance": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "deployment": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "skills": {
+      "type": "array",
+      "items": {"type": "object", "additionalProperties": true}
+    },
+    "interop": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

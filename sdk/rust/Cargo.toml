@@ -14,3 +14,4 @@ walkdir = "2"
 sha2 = "0.10"
 hex = "0.4"
 tempfile = { version = "3", optional = false }
+regex = "1"

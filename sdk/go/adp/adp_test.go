@@ -138,7 +138,7 @@ func TestValidateADPEmptyID(t *testing.T) {
 
 func TestValidateADPInvalidVersion(t *testing.T) {
 	adp := &ADP{
-		ADPVersion: "0.3.0", // Invalid version (not in schema enum)
+		ADPVersion: "9.9.9",
 		ID:         "test",
 		Runtime:    Runtime{Execution: []RuntimeEntry{{Backend: "python", ID: "py", Entrypoint: "main:app"}}},
 		Flow:       map[string]interface{}{},
@@ -146,6 +146,141 @@ func TestValidateADPInvalidVersion(t *testing.T) {
 	}
 	if err := ValidateADP(adp); err == nil {
 		t.Fatal("expected validation error for invalid version")
+	}
+}
+
+func TestValidateADPV0_3_0(t *testing.T) {
+	adp := &ADP{
+		ADPVersion: "0.3.0",
+		ID:         "agent.v0.3.0",
+		Runtime:    Runtime{Execution: []RuntimeEntry{{Backend: "python", ID: "py", Entrypoint: "main:app"}}},
+		Flow:       minimalFlow(),
+		Evaluation: minimalEvaluation(),
+	}
+	if err := ValidateADP(adp); err != nil {
+		t.Fatalf("unexpected error for v0.3.0: %v", err)
+	}
+}
+
+func TestSemanticsCheck12HookNodeFilterUnknown(t *testing.T) {
+	adp := &ADP{
+		ADPVersion: "0.1.0",
+		ID:         "hook-check",
+		Runtime:    Runtime{Execution: []RuntimeEntry{{Backend: "python", ID: "py"}}},
+		Flow: map[string]interface{}{
+			"graph": map[string]interface{}{
+				"nodes":       []interface{}{map[string]interface{}{"id": "n1", "kind": "input"}},
+				"edges":       []interface{}{},
+				"start_nodes": []interface{}{"n1"},
+				"end_nodes":   []interface{}{"n1"},
+			},
+		},
+		Evaluation: map[string]interface{}{},
+		Hooks: []interface{}{
+			map[string]interface{}{
+				"event":       "on_node_end",
+				"node_filter": []interface{}{"n1", "ghost-node"},
+				"handler":     map[string]interface{}{"type": "function", "function_ref": "mod:fn"},
+			},
+		},
+	}
+	errs := ValidateADPSemantics(adp)
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e, "node_filter") && strings.Contains(e, "ghost-node") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected hook node_filter error, got: %v", errs)
+	}
+}
+
+func TestSemanticsCheck13SubflowAdpRefUnknown(t *testing.T) {
+	adp := &ADP{
+		ADPVersion: "0.1.0",
+		ID:         "subflow-check",
+		Runtime:    Runtime{Execution: []RuntimeEntry{{Backend: "python", ID: "py"}}},
+		Flow: map[string]interface{}{
+			"graph": map[string]interface{}{
+				"nodes":       []interface{}{map[string]interface{}{"id": "delegate", "kind": "subflow", "adp_ref": "unknown-subagent"}},
+				"edges":       []interface{}{},
+				"start_nodes": []interface{}{"delegate"},
+				"end_nodes":   []interface{}{"delegate"},
+			},
+		},
+		Evaluation: map[string]interface{}{},
+		Subagents:  []Subagent{{ID: "known-subagent", Ref: "./other/agent.yaml"}},
+	}
+	errs := ValidateADPSemantics(adp)
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e, "adp_ref") || strings.Contains(e, "subagents") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected subflow adp_ref error, got: %v", errs)
+	}
+}
+
+func TestSemanticsCheck14EvaluatorRefUnknown(t *testing.T) {
+	adp := &ADP{
+		ADPVersion: "0.1.0",
+		ID:         "eval-ref-check",
+		Runtime:    Runtime{Execution: []RuntimeEntry{{Backend: "python", ID: "py"}}},
+		Flow:       minimalFlow(),
+		Evaluation: map[string]interface{}{
+			"suites": []interface{}{map[string]interface{}{
+				"id": "s1",
+				"metrics": []interface{}{map[string]interface{}{
+					"id": "m1", "type": "deterministic", "function": "noop",
+					"scoring": "boolean", "threshold": true,
+					"evaluator_ref": "missing-evaluator",
+				}},
+			}},
+		},
+		XTesting: map[string]interface{}{
+			"evaluators": []interface{}{
+				map[string]interface{}{"id": "known-evaluator", "type": "llm_judge", "model": "gpt-4o"},
+			},
+		},
+	}
+	errs := ValidateADPSemantics(adp)
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e, "evaluator_ref") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected evaluator_ref error, got: %v", errs)
+	}
+}
+
+func TestLoadEvaluatorUnsupportedTypes(t *testing.T) {
+	for _, evalType := range []string{"deterministic", "llm_judge", "container"} {
+		_, err := LoadEvaluator(map[string]interface{}{"id": "e1", "type": evalType})
+		if err == nil {
+			t.Errorf("expected error for type %q, got nil", evalType)
+		}
+	}
+}
+
+func TestLoadEvaluatorScriptMissingRuntime(t *testing.T) {
+	_, err := LoadEvaluator(map[string]interface{}{"id": "e1", "type": "script", "inline": "echo hi"})
+	if err == nil {
+		t.Fatal("expected error when runtime is missing")
+	}
+}
+
+func TestLoadEvaluatorScriptNonBashRuntime(t *testing.T) {
+	_, err := LoadEvaluator(map[string]interface{}{
+		"id": "e1", "type": "script", "runtime": "python",
+		"inline": "def evaluate(o, c): return True",
+	})
+	if err == nil {
+		t.Fatal("expected error for python runtime in Go SDK")
 	}
 }
 

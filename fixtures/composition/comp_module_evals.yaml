@@ -1,0 +1,7 @@
+id: "fixture.comp.module.evals"
+
+evaluation:
+  suites:
+    - id: "accuracy"
+      metrics:
+        - { id: "factuality", type: "llm_judge", threshold: 0.85 }

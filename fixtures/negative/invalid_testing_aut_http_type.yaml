@@ -1,0 +1,5 @@
+x_testing:
+  aut:
+    adapter:
+      type: "http"
+      endpoint: "https://staging.example.com/invoke"

@@ -66,3 +66,48 @@ See [ESP Specification](esp.md) for model resolution semantics.
 
 ## ACME runtime example
 See `examples/runtime/acme-runtime-example.yaml` for a composite runtime with docker, wasm, python, typescript, binary, and custom backends.
+
+---
+
+## Model Parameters (v0.3.0)
+
+Eight new optional fields on each `runtime.models[]` entry:
+
+| Field | Type | Constraint | Provider mapping |
+|---|---|---|---|
+| `top_p` | number | 0.0–1.0 | OpenAI `top_p` · Anthropic `top_p` |
+| `seed` | integer | — | OpenAI `seed` (exact) · Anthropic best-effort |
+| `timeout_ms` | integer | ≥ 1 | Runner-enforced per-call timeout; not sent to provider |
+| `use_streaming_api` | boolean | — | OpenAI `stream: true` · Anthropic `stream: true` (internal; see below) |
+| `stop_sequences` | array[string] | max 4 items | OpenAI `stop` · Anthropic `stop_sequences` |
+| `frequency_penalty` | number | −2.0–2.0 | OpenAI `frequency_penalty` · not supported by Anthropic |
+| `presence_penalty` | number | −2.0–2.0 | OpenAI `presence_penalty` · not supported by Anthropic |
+| `structured_output` | object | — | OpenAI `response_format` · Anthropic tool_use schema |
+
+`structured_output` fields:
+- `format`: `"json_object"` \| `"json_schema"` \| `"text"`
+- `schema`: Inline JSON Schema object (used when `format: "json_schema"`)
+- `schema_ref`: Path or URI to a JSON Schema file (alternative to `schema`)
+
+### `use_streaming_api` vs `streaming.enabled` — precedence rule
+
+These are two distinct concepts:
+
+- `model.use_streaming_api: true` — calls the LLM provider API in streaming mode **internally**. The runner may buffer tokens before returning to the caller. This is a model-level implementation detail.
+- `streaming.enabled: true` (top-level) — the agent **exposes** streaming to its callers. This is an agent-level interface contract.
+
+They are independent: `use_streaming_api: true` + `streaming.enabled: false` is valid — the runner calls OpenAI in streaming mode internally but returns a buffered complete response to callers.
+
+**Hard rule**: `streaming.enabled: false` MUST be respected. Runners MUST NOT stream to callers even if `use_streaming_api: true` is declared on the model.
+
+## Adapter Hints (v0.3.0)
+
+`runtime.adapter_hints` (optional object) is the framework-specific configuration escape hatch. Keys are framework adapter names; values are open objects validated by each adapter's own schema.
+
+Known framework keys with typed sub-schemas:
+- `langgraph`: `recursion_limit` (int), `stream_mode` (`"values"|"updates"|"debug"`), `checkpointer` (`"memory"|"sqlite"|"postgres"|"none"`)
+- `autogen`: `max_turns` (int), `human_input_mode` (`"NEVER"|"TERMINATE"|"ALWAYS"`)
+- `crewai`: `process` (`"sequential"|"hierarchical"|"parallel"`), `verbose` (bool), `memory` (bool)
+- `semantic_kernel`: `execution_type` (`"sequential"|"stepwise"`)
+
+Runners ignore keys for unsupported frameworks. Unknown keys pass through. See [`spec/adp-v0.3.0-pipeline.md`](adp-v0.3.0-pipeline.md) for the complete adapter hints specification.

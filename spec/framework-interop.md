@@ -209,12 +209,12 @@ def adp_from_langgraph(
 
 ## AutoGen Mapping
 
-ADP flow nodes map to AutoGen `ConversableAgent` instances; edges model `initiate_chat` sequences. The `router` node kind maps to `GroupChatManager` with speaker selection based on state. ADP state (`context`, `tool_responses`) maps to `agent.chat_messages`. Detailed mapping is deferred to v0.2.0; this section provides directional guidance.
+ADP flow nodes map to `autogen_agentchat` `AssistantAgent` instances (pyautogen >= 0.4). The `router` node kind maps to `RoundRobinGroupChat` or `SelectorGroupChat` with speaker selection based on state. ADP state (`context`, `tool_responses`) is passed via the agent message protocol.
 
 Key differences from LangGraph:
-- AutoGen is message-passing, not graph-traversal; explicit `initiate_chat` sequences replace edges
-- Shared state requires explicit agent-to-agent message construction
-- Conditional routing is implemented via `GroupChatManager.speaker_selection_method`
+- AutoGen is message-passing, not graph-traversal; `RoundRobinGroupChat` replaces explicit `initiate_chat` sequences
+- Conditional routing is implemented via `SelectorGroupChat` speaker selection
+- Non-router nodes → `AssistantAgent(name=node_id, model_client=None)`; router nodes → additionally create a `SelectorGroupChat` keyed as `{node_id}_team`
 
 ---
 
@@ -271,3 +271,102 @@ initial_state = {
 ```
 
 `inputs` is set once from the invocation payload and is not mutated by any node.
+
+---
+
+## Consuming Composition-Resolved Manifests
+
+When using composition (`extends`, `import`, `overrides`), call `resolve_adp()` before building the framework graph. `resolve_adp()` returns a fully merged, validated `ADP` object. Pass its `model_dump(by_alias=True, exclude_none=True)` (Python) or equivalent as the manifest dict to the framework builder function.
+
+### Python pattern
+
+```python
+from adp_sdk import resolve_adp
+
+adp = resolve_adp("examples/composition/billing-variant.yaml")
+manifest = adp.model_dump(by_alias=True, exclude_none=True)
+graph, node_map = build_langgraph_from_adp(manifest, backend_factory)
+```
+
+### `tool_ref` resolution
+
+When a node has `tool_ref`, look up the tool across all tool types before graph construction:
+
+```python
+def resolve_tool(manifest: dict, tool_ref: str) -> dict:
+    tools = manifest.get("tools", {})
+    for tool_list_key in ("mcp_servers", "http_apis", "sql_functions"):
+        for tool in tools.get(tool_list_key, []):
+            if tool["id"] == tool_ref:
+                return tool
+    raise ValueError(f"tool_ref '{tool_ref}' not found in tools")
+```
+
+Pass the resolved tool entry to the backend factory so it can construct the correct callable (HTTP client, MCP transport, SQL connector, etc.).
+
+### LangGraph — composition-enabled
+
+```python
+from adp_sdk import resolve_adp
+from adp_sdk.integrations.langgraph import build_langgraph_from_adp
+
+adp = resolve_adp("examples/composition/billing-variant.yaml")
+manifest = adp.model_dump(by_alias=True, exclude_none=True)
+graph, _ = build_langgraph_from_adp(manifest, backend_factory)
+```
+
+### AutoGen — import-only (ADP → AutoGen)
+
+ADP composition is resolved first; the merged manifest drives `AssistantAgent` construction (pyautogen >= 0.4 / `autogen_agentchat`). Flow-to-agent export (AutoGen → ADP) is deferred to v0.3.0.
+
+```python
+from adp_sdk import resolve_adp
+from adp_sdk.integrations.autogen import build_autogen_from_adp
+
+adp = resolve_adp("examples/composition/billing-variant.yaml")
+manifest = adp.model_dump(by_alias=True, exclude_none=True)
+agent_map, chat_sequence = build_autogen_from_adp(manifest, backend_factory)
+```
+
+See `examples/runners/autogen/` for a runnable pytest suite.
+
+### CrewAI — import-only (ADP → CrewAI)
+
+```python
+from adp_sdk import resolve_adp
+from adp_sdk.integrations.crewai import build_crewai_from_adp
+
+adp = resolve_adp("examples/composition/billing-variant.yaml")
+manifest = adp.model_dump(by_alias=True, exclude_none=True)
+flow_instance, agents = build_crewai_from_adp(manifest, backend_factory)
+```
+
+Targets the CrewAI Flows API (`crewai>=1.0`). See `examples/runners/crewai/`.
+
+### Semantic Kernel — import-only (ADP → SK)
+
+```python
+from adp_sdk import resolve_adp
+from adp_sdk.integrations.semantic_kernel import build_sk_from_adp
+
+adp = resolve_adp("examples/composition/billing-variant.yaml")
+manifest = adp.model_dump(by_alias=True, exclude_none=True)
+kernel, process = build_sk_from_adp(manifest, backend_factory)
+```
+
+Targets SK Python `>=1.3` with `KernelProcess`. Note: `KernelProcess` is experimental in SK Python (stable in C#). See `examples/runners/semantic-kernel/`.
+
+---
+
+## Runner Examples Summary
+
+| Runner | Module | Entry point | ADP concepts covered | Import/Export |
+|--------|--------|------------|---------------------|---------------|
+| LangGraph | `adp_sdk.integrations.langgraph` | `build_langgraph_from_adp` | Nodes→StateGraph, conditions, composition, round-trip | Both |
+| AutoGen | `adp_sdk.integrations.autogen` | `build_autogen_from_adp` | Nodes→AssistantAgent, router→RoundRobinGroupChat | Import only |
+| CrewAI | `adp_sdk.integrations.crewai` | `build_crewai_from_adp` | Nodes→Agent/Task, router→@router, @start | Import only |
+| Semantic Kernel | `adp_sdk.integrations.semantic_kernel` | `build_sk_from_adp` | Nodes→KernelFunction/Plugin, KernelProcess | Import only |
+
+All examples use `examples/composition/billing-variant.yaml` as the primary test manifest. Run `pytest -v` in each runner directory.
+
+The `examples/runners/*/build_adp_graph.py` files are thin re-export shims for backward compatibility (`from adp_sdk.integrations.<module> import *`). For new code, import directly from `adp_sdk.integrations.*`.

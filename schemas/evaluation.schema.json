@@ -11,13 +11,17 @@
       "items": {"$ref": "#/definitions/suite"}
     },
     "promotion_policy": {
-      "$comment": "blocking: bool is deferred to v0.2.0",
       "type": "object",
       "properties": {
         "require_passing_suites": {
           "type": "array",
           "items": {"type": "string"},
           "description": "IDs of suites that must pass before promotion"
+        },
+        "blocking": {
+          "type": "boolean",
+          "description": "If true, runner MUST stop and return error when a suite threshold is not met. Normative in v0.2.0.",
+          "default": false
         }
       },
       "additionalProperties": false
@@ -53,7 +57,7 @@
       "required": ["id", "type"],
       "properties": {
         "id": {"type": "string"},
-        "type": {"type": "string", "enum": ["deterministic", "llm_judge", "telemetry"]},
+        "type": {"type": "string", "enum": ["deterministic", "llm_judge", "telemetry", "script", "container"]},
         "description": {"type": "string"},
         "function": {"type": "string"},
         "schema_path": {"type": "string"},
@@ -93,6 +97,15 @@
         },
         "metric": {"type": "string"},
         "max_ms": {"type": "number"},
+        "judge_ref": {
+          "type": "string",
+          "$comment": "Deprecated. Use evaluator_ref which accepts any evaluator type.",
+          "description": "References x_testing.judges[].id (or testing.judges[].id in v0.3.0) for a reproducibility-pinned judge configuration. When present, overrides inline model/system_prompt/rubric for this metric."
+        },
+        "evaluator_ref": {
+          "type": "string",
+          "description": "References x_testing.evaluators[].id. Supersedes judge_ref."
+        },
         "execution": {
           "type": "object",
           "properties": {
@@ -103,9 +116,24 @@
           },
           "additionalProperties": false
         },
-        "aggregation": {"type": "string"}
+        "aggregation": {"type": "string"},
+        "runtime": { "type": "string", "enum": ["python", "bash", "javascript"] },
+        "inline": { "type": "string" },
+        "script_ref": { "type": "string", "description": "Path, URI, or git+https://…@sha." },
+        "image": { "type": "string" },
+        "image_digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "command": { "type": "array", "items": { "type": "string" } },
+        "env": { "type": "object", "additionalProperties": { "type": "string" } },
+        "input_format": { "type": "string", "enum": ["json_stdin", "file"] },
+        "output_format": { "type": "string", "enum": ["json_stdout", "file"] },
+        "timeout_seconds": { "type": "number", "minimum": 1 },
+        "weight": { "type": "number", "minimum": 0 }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        { "if": {"properties": {"type": {"const": "script"}}, "required": ["type"]}, "then": {"required": ["runtime"], "anyOf": [{"required": ["inline"]}, {"required": ["script_ref"]}]} },
+        { "if": {"properties": {"type": {"const": "container"}}, "required": ["type"]}, "then": {"required": ["image", "image_digest"]} }
+      ]
     }
   }
 }

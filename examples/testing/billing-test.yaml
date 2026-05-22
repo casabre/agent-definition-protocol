@@ -1,0 +1,80 @@
+adp_version: "0.3.0"
+id: "agent.acme.billing.test"
+extends: "../composition/billing-variant.yaml"
+
+x_testing:
+  aut:
+    description: "Staging override for billing agent"
+    endpoint: "https://staging.billing.acme.example/invoke"
+    timeout_seconds: 30
+    env:
+      BILLING_MODE: "test"
+  evaluators:
+    - id: "semantic-accuracy"
+      type: "llm_judge"
+      model: "gpt-4o"
+      system_prompt: "Rate the billing response accuracy from 0.0 to 1.0."
+      threshold: 0.8
+    - id: "schema-validator"
+      type: "container"
+      image: "ghcr.io/acme/billing-eval:v1.2"
+      image_digest: "sha256:abc123abc123abc123abc123abc123abc123abc123abc123abc123abc123abc1"
+      timeout_seconds: 10
+    - id: "field-checker"
+      type: "script"
+      runtime: "python"
+      script_ref: "git+https://github.com/acme/evals/billing/check_fields.py@abc1234"
+      threshold: 1.0
+  judges:
+    - id: "quality-judge"
+      provider: "openai"
+      model: "gpt-4o"
+      temperature: 0.0
+      seed: 42
+      rubric:
+        source:
+          type: "git"
+          repo: "https://github.com/acme/eval-rubrics"
+          path: "rubrics/billing-quality.md"
+          ref: "v1.0"
+          commit: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+  checkers:
+    - id: "response-schema"
+      type: "json_schema"
+      schema:
+        type: object
+        required: [invoice_id, total_amount, status]
+    - id: "no-debug-output"
+      type: "regex"
+      pattern: "TRACE|DEBUG"
+      invert: true
+  parameters:
+    max_concurrency: 4
+    timeout_per_scenario_ms: 30000
+    retry_on_failure: false
+  corpus:
+    - id: "billing-scenarios-v1"
+      description: "Standard billing QA scenarios"
+      source:
+        type: "oci"
+        image: "registry.acme.example/test-corpus/billing:1.0.0"
+        digest: "sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+      format: "jsonl"
+  run_record:
+    output_format: "jsonl"
+    destination:
+      type: "local"
+      path: "./test-results/"
+
+evaluation:
+  suites:
+    - id: "billing-quality"
+      metrics:
+        - id: "quality"
+          type: "llm_judge"
+          judge_ref: "quality-judge"
+          threshold: 0.8
+      promotion_threshold: 0.8
+  promotion_policy:
+    require_passing_suites: ["billing-quality"]
+    blocking: true

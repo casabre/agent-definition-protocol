@@ -1,0 +1,4 @@
+crewai>=0.63
+pytest>=7.0
+pyyaml>=6.0
+# adp-sdk: install with `pip install -e ../../../sdk/python`

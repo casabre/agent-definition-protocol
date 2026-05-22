@@ -66,7 +66,7 @@ def test_validate_missing_required_fields():
 def test_validate_invalid_adp_version():
     """Test validation fails with invalid adp_version."""
     adp = ADP(
-        adp_version="0.3.0",  # Invalid version (not in schema enum)
+        adp_version="9.9.9",  # Not in schema enum (0.1.0, 0.2.0, 0.3.0)
         id="agent.test",
         runtime=RuntimeModel(execution=[
             RuntimeEntry(backend="python", id="py", entrypoint="main:app")
@@ -76,7 +76,7 @@ def test_validate_invalid_adp_version():
     )
     errors = validate_adp(adp)
     assert len(errors) > 0, "Expected validation errors for invalid version"
-    assert any("0.1.0" in err or "version" in err.lower() or "enum" in err.lower() for err in errors)
+    assert any("9.9.9" in err or "not one of" in err or "enum" in err.lower() for err in errors)
 
 
 def test_validate_v0_1_0_adp():
@@ -315,4 +315,34 @@ def test_validate_conformance_class_full_rejects_empty_flow():
     )
     errors = validate_adp(adp)
     assert any("full" in e and "flow" in e for e in errors), f"Expected conformance_class 'full' error, got: {errors}"
+
+
+def test_semantic_validation_check12_hook_node_filter():
+    """Check 12: node_filter referencing a nonexistent node ID is detected."""
+    fixture_path = Path(__file__).resolve().parents[2].parent / "fixtures" / "semantic" / "sem_neg_hook_node_filter.yaml"
+    if not fixture_path.exists():
+        pytest.skip(f"Fixture not found: {fixture_path}")
+    adp = ADP.from_file(fixture_path)
+    errors = validate_adp_semantics(adp)
+    assert any("node_filter" in e for e in errors), f"Expected node_filter error, got: {errors}"
+
+
+def test_semantic_validation_check13_subagent_ref():
+    """Check 13: subflow adp_ref that doesn't resolve to a known subagents[] entry is detected."""
+    fixture_path = Path(__file__).resolve().parents[2].parent / "fixtures" / "semantic" / "sem_neg_subagent_ref.yaml"
+    if not fixture_path.exists():
+        pytest.skip(f"Fixture not found: {fixture_path}")
+    adp = ADP.from_file(fixture_path)
+    errors = validate_adp_semantics(adp)
+    assert any("adp_ref" in e for e in errors), f"Expected adp_ref error, got: {errors}"
+
+
+def test_semantic_validation_check14_evaluator_ref():
+    """Check 14: evaluator_ref not matching any x_testing evaluator/judge ID is detected."""
+    fixture_path = Path(__file__).resolve().parents[2].parent / "fixtures" / "semantic" / "sem_neg_evaluator_ref.yaml"
+    if not fixture_path.exists():
+        pytest.skip(f"Fixture not found: {fixture_path}")
+    adp = ADP.from_file(fixture_path)
+    errors = validate_adp_semantics(adp)
+    assert any("evaluator_ref" in e for e in errors), f"Expected evaluator_ref error, got: {errors}"
 

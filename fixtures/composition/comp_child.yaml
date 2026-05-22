@@ -1,0 +1,16 @@
+adp_version: "0.2.0"
+id: "fixture.comp.child"
+extends: "./comp_base.yaml"
+
+# evaluation key is intentionally omitted — base suites are inherited via RFC 7396.
+# DO NOT write `evaluation: {}` — that would replace base evaluation with an empty object.
+
+flow:
+  id: "fixture.comp.child.flow"
+  graph:
+    nodes:
+      - { id: "input",  kind: "input" }
+      - { id: "output", kind: "output" }
+    edges: []
+    start_nodes: ["input"]
+    end_nodes:   ["output"]

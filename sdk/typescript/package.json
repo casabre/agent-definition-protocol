@@ -20,5 +20,13 @@
     "ts-node": "^10.9.2",
     "tsx": "^4.7.0",
     "typescript": "^5.5.0"
+  },
+  "peerDependencies": {
+    "@langchain/langgraph": ">=0.2",
+    "@microsoft/semantic-kernel": ">=1.0"
+  },
+  "peerDependenciesMeta": {
+    "@langchain/langgraph": { "optional": true },
+    "@microsoft/semantic-kernel": { "optional": true }
   }
 }

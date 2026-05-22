@@ -1,4 +1,4 @@
-adp_version: "0.1.0"
+adp_version: "0.3.0"
 id: "agent.acme.analytics"
 name: "Acme Analytics Agent"
 description: "Answers analytic questions over Acme telemetry and metrics."
@@ -57,9 +57,43 @@ skills:
       - "What is the p95 latency for service api?"
     input_modes: ["text"]
     output_modes: ["text"]
+    visibility: "public"
+  - id: "export-raw"
+    name: "Export raw telemetry data"
+    description: "Export raw metric data as CSV or JSON for authenticated callers."
+    tags: ["export", "metrics"]
+    input_modes: ["text"]
+    output_modes: ["application/json", "text/csv"]
+    visibility: "authenticated"
 interop:
   a2a:
-    ref: "./docs/agentcard.json"
+    # ref: "./docs/agentcard.json"  # old pattern — kept as comment for reference
+    card_url: "https://agent.acme.example.com/.well-known/agent.json"
+    agent_card:
+      name: "Acme Analytics Agent"
+      description: "Answers analytic questions over Acme telemetry and metrics"
+      url: "https://agent.acme.example.com/"
+      version: "1.0.0"
+      capabilities:
+        streaming: false
+        push_notifications: false
+        state_transition_history: false
+      authentication:
+        schemes: ["Bearer"]
+      default_input_modes: ["text/plain"]
+      default_output_modes: ["application/json"]
+    authenticated_extension:
+      capabilities:
+        push_notifications: true
+      authentication:
+        schemes: ["Bearer", "oauth2"]
+        oauth2:
+          authorization_url: "https://auth.acme.example.com/oauth2/authorize"
+          token_url: "https://auth.acme.example.com/oauth2/token"
+          scopes: ["analytics:read", "analytics:export"]
+      push_notification_config:
+        endpoint: "https://agent.acme.example.com/notifications"
+        auth_scheme: "Bearer"
 tools:
   mcp_servers:
     - id: "metrics-mcp"
@@ -70,7 +104,9 @@ tools:
     - id: "metrics-api"
       description: "REST API for metrics"
       base_url: "https://api.acme.example"
-      auth: "Bearer token via env METRICS_TOKEN"
+      auth:
+        scheme: "bearer"
+        env_var: "METRICS_TOKEN"
   sql_functions:
     - id: "analytics.fn_latency"
       description: "Returns latency percentiles"
@@ -108,11 +144,20 @@ kpis:
     url: "https://dash.acme.example/kpi/accuracy-core"
     target: 0.9
     unit: "ratio"
+telemetry:
+  endpoint: "https://otel.acme.example/v1"
+  protocol: "http/protobuf"
+  service_name: "acme-analytics"
+  required_attributes:
+    - "gen_ai.system"
+    - "gen_ai.request.model"
+    - "gen_ai.usage.input_tokens"
+    - "gen_ai.usage.output_tokens"
+
 governance:
   identity: "spn:acme-agents/analytics"
   allowed_data_scopes: ["metrics.telemetry", "logs.sanitized"]
   forbidden_data_scopes: ["pii.raw"]
-  telemetry_endpoint: "https://otel.acme.example/v1"
   guardrail_policy_set: "./policies/guardrails.json"
 deployment:
   environments:

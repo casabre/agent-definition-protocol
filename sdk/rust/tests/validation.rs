@@ -1,4 +1,5 @@
-use adp_sdk::adp::{Adp, Model, Runtime, RuntimeEntry};
+use adp_sdk::adp::{Adp, Model, Runtime, RuntimeEntry, Subagent};
+use adp_sdk::evaluation::{load_evaluator, EvaluatorError};
 use adp_sdk::validation::{validate_adp, validate_adp_semantics};
 
 fn minimal_flow() -> serde_yaml::Value {
@@ -37,9 +38,10 @@ fn validation_rejects_missing_execution() {
         adp_version: "0.1.0".into(),
         id: "agent.test".into(),
         conformance_class: None,
-        runtime: Runtime { execution: vec![], models: None },
+        runtime: Runtime { execution: vec![], models: None, ..Default::default() },
         flow: serde_yaml::Value::Null,
         evaluation: serde_yaml::Value::Null,
+        ..Default::default()
     };
     assert!(validate_adp(&adp).is_err(), "Should reject empty execution array");
     let err = validate_adp(&adp).unwrap_err();
@@ -53,9 +55,10 @@ fn validation_accepts_basic() {
         adp_version: "0.1.0".into(),
         id: "agent.test".into(),
         conformance_class: None,
-        runtime: Runtime { execution: vec![python_entry()], models: None },
+        runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
         flow: minimal_flow(),
         evaluation: minimal_evaluation(),
+        ..Default::default()
     };
     assert!(validate_adp(&adp).is_ok(), "Should accept valid basic ADP");
 }
@@ -63,12 +66,13 @@ fn validation_accepts_basic() {
 #[test]
 fn validation_rejects_invalid_version() {
     let adp = Adp {
-        adp_version: "0.3.0".into(),
+        adp_version: "9.9.9".into(),
         id: "agent.test".into(),
         conformance_class: None,
-        runtime: Runtime { execution: vec![python_entry()], models: None },
+        runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
         flow: serde_yaml::Value::Null,
         evaluation: serde_yaml::Value::Null,
+        ..Default::default()
     };
     assert!(validate_adp(&adp).is_err(), "Should reject invalid version");
 }
@@ -79,7 +83,7 @@ fn validation_accepts_v0_1_0() {
         adp_version: "0.1.0".into(),
         id: "agent.v0.1.0".into(),
         conformance_class: None,
-        runtime: Runtime { execution: vec![python_entry()], models: None },
+        runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
         flow: serde_yaml::from_str(r#"
 id: "test.flow"
 graph:
@@ -93,6 +97,7 @@ graph:
   end_nodes: ["output"]
 "#).unwrap(),
         evaluation: minimal_evaluation(),
+        ..Default::default()
     };
     assert!(validate_adp(&adp).is_ok(), "Should accept v0.1.0 ADP");
 }
@@ -103,9 +108,10 @@ fn validation_rejects_empty_id() {
         adp_version: "0.1.0".into(),
         id: "".into(),
         conformance_class: None,
-        runtime: Runtime { execution: vec![python_entry()], models: None },
+        runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
         flow: serde_yaml::Value::Null,
         evaluation: serde_yaml::Value::Null,
+        ..Default::default()
     };
     let result = validate_adp(&adp);
     assert!(result.is_err(), "validation must reject empty id");
@@ -125,9 +131,11 @@ fn validation_accepts_multiple_backends() {
                 RuntimeEntry { backend: "wasm".into(), id: "wasm".into(), module: Some("agent.wasm".into()), ..Default::default() },
             ],
             models: None,
+            ..Default::default()
         },
         flow: minimal_flow(),
         evaluation: minimal_evaluation(),
+        ..Default::default()
     };
     assert!(validate_adp(&adp).is_ok(), "Should accept multiple backends");
     assert_eq!(adp.runtime.execution.len(), 3, "Should have 3 execution entries");
@@ -144,9 +152,11 @@ fn validation_accepts_different_backend_types() {
             runtime: Runtime {
                 execution: vec![RuntimeEntry { backend: backend.into(), id: format!("{}-id", backend), ..Default::default() }],
                 models: None,
+                ..Default::default()
             },
             flow: serde_yaml::Value::Null,
             evaluation: serde_yaml::Value::Null,
+            ..Default::default()
         };
         let result = validate_adp(&adp);
         assert!(result.is_ok() || result.is_err(), "Validation should return result for backend {}", backend);
@@ -170,9 +180,10 @@ graph:
         adp_version: "0.1.0".into(),
         id: "agent.flow".into(),
         conformance_class: None,
-        runtime: Runtime { execution: vec![python_entry()], models: None },
+        runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
         flow: flow_yaml,
         evaluation: minimal_evaluation(),
+        ..Default::default()
     };
     assert!(validate_adp(&adp).is_ok(), "Should accept ADP with flow structure");
 }
@@ -183,7 +194,7 @@ fn semantic_validation_passes_for_valid_adp() {
         adp_version: "0.1.0".into(),
         id: "agent.test".into(),
         conformance_class: None,
-        runtime: Runtime { execution: vec![python_entry()], models: None },
+        runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
         flow: serde_yaml::from_str(r#"
 graph:
   nodes:
@@ -198,6 +209,7 @@ graph:
   end_nodes: ["n2"]
 "#).unwrap(),
         evaluation: minimal_evaluation(),
+        ..Default::default()
     };
     let errors = validate_adp_semantics(&adp);
     assert!(errors.is_empty(), "Expected no semantic errors, got: {:?}", errors);
@@ -209,7 +221,7 @@ fn semantic_validation_rejects_dangling_edge() {
         adp_version: "0.1.0".into(),
         id: "agent.test".into(),
         conformance_class: None,
-        runtime: Runtime { execution: vec![python_entry()], models: None },
+        runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
         flow: serde_yaml::from_str(r#"
 graph:
   nodes:
@@ -222,6 +234,7 @@ graph:
   end_nodes: ["input"]
 "#).unwrap(),
         evaluation: serde_yaml::Value::Null,
+        ..Default::default()
     };
     let errors = validate_adp_semantics(&adp);
     assert!(errors.iter().any(|e| e.contains("ghost")), "Expected dangling edge error, got: {:?}", errors);
@@ -233,7 +246,7 @@ fn semantic_validation_rejects_duplicate_node() {
         adp_version: "0.1.0".into(),
         id: "agent.test".into(),
         conformance_class: None,
-        runtime: Runtime { execution: vec![python_entry()], models: None },
+        runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
         flow: serde_yaml::from_str(r#"
 graph:
   nodes:
@@ -246,6 +259,7 @@ graph:
   end_nodes: ["input"]
 "#).unwrap(),
         evaluation: serde_yaml::Value::Null,
+        ..Default::default()
     };
     let errors = validate_adp_semantics(&adp);
     assert!(errors.iter().any(|e| e.contains("duplicate")), "Expected duplicate node error, got: {:?}", errors);
@@ -257,7 +271,7 @@ fn semantic_validation_rejects_bad_suite_ref() {
         adp_version: "0.1.0".into(),
         id: "agent.test".into(),
         conformance_class: None,
-        runtime: Runtime { execution: vec![python_entry()], models: None },
+        runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
         flow: serde_yaml::from_str(r#"
 graph:
   nodes:
@@ -269,6 +283,7 @@ graph:
   end_nodes: ["n1"]
 "#).unwrap(),
         evaluation: minimal_evaluation(),
+        ..Default::default()
     };
     let errors = validate_adp_semantics(&adp);
     assert!(errors.iter().any(|e| e.contains("suite_ref")), "Expected suite_ref error, got: {:?}", errors);
@@ -286,12 +301,9 @@ fn semantic_validation_rejects_bad_model_ref() {
                 id: "gpt4".into(),
                 provider: "openai".into(),
                 model: "gpt-4o".into(),
-                api_key_env: None,
-                base_url: None,
-                temperature: None,
-                max_tokens: None,
-                extensions: None,
+                ..Default::default()
             }]),
+            ..Default::default()
         },
         flow: serde_yaml::from_str(r#"
 graph:
@@ -304,6 +316,7 @@ graph:
   end_nodes: ["n1"]
 "#).unwrap(),
         evaluation: serde_yaml::Value::Null,
+        ..Default::default()
     };
     let errors = validate_adp_semantics(&adp);
     assert!(errors.iter().any(|e| e.contains("model_ref")), "Expected model_ref error, got: {:?}", errors);
@@ -318,6 +331,7 @@ fn semantic_validation_rejects_bad_runtime_ref() {
         runtime: Runtime {
             execution: vec![python_entry()],
             models: None,
+            ..Default::default()
         },
         flow: serde_yaml::from_str(r#"
 graph:
@@ -330,6 +344,7 @@ graph:
   end_nodes: ["n1"]
 "#).unwrap(),
         evaluation: serde_yaml::Value::Null,
+        ..Default::default()
     };
     let errors = validate_adp_semantics(&adp);
     assert!(errors.iter().any(|e| e.contains("runtime_ref")), "Expected runtime_ref error, got: {:?}", errors);
@@ -341,9 +356,10 @@ fn validation_rejects_conformance_class_full_with_empty_flow() {
         adp_version: "0.1.0".into(),
         id: "agent.full".into(),
         conformance_class: Some("full".into()),
-        runtime: Runtime { execution: vec![python_entry()], models: None },
+        runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
         flow: serde_yaml::Value::Mapping(Default::default()),
         evaluation: minimal_evaluation(),
+        ..Default::default()
     };
     let result = validate_adp(&adp);
     assert!(result.is_err(), "Expected error for conformance_class=full with empty flow");
@@ -367,9 +383,149 @@ suites:
         adp_version: "0.1.0".into(),
         id: "agent.eval".into(),
         conformance_class: None,
-        runtime: Runtime { execution: vec![python_entry()], models: None },
+        runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
         flow: minimal_flow(),
         evaluation: eval_yaml,
+        ..Default::default()
     };
     assert!(validate_adp(&adp).is_ok(), "Should accept ADP with evaluation structure");
+}
+
+#[test]
+fn validation_accepts_v0_3_0() {
+    let adp = Adp {
+        adp_version: "0.3.0".into(),
+        id: "agent.v0.3.0".into(),
+        runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
+        flow: minimal_flow(),
+        evaluation: minimal_evaluation(),
+        ..Default::default()
+    };
+    assert!(validate_adp(&adp).is_ok(), "Should accept v0.3.0 ADP");
+}
+
+#[test]
+fn semantic_check12_rejects_hook_node_filter_with_unknown_node() {
+    let adp = Adp {
+        adp_version: "0.1.0".into(),
+        id: "agent.test".into(),
+        runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
+        flow: serde_yaml::from_str(r#"
+graph:
+  nodes:
+    - id: "n1"
+      kind: "input"
+  edges: []
+  start_nodes: ["n1"]
+  end_nodes: ["n1"]
+"#).unwrap(),
+        evaluation: serde_yaml::Value::Null,
+        hooks: Some(serde_json::json!([
+            {
+                "event": "on_node_end",
+                "node_filter": ["n1", "ghost-node"],
+                "handler": { "type": "function", "function_ref": "mod:fn" }
+            }
+        ])),
+        ..Default::default()
+    };
+    let errors = validate_adp_semantics(&adp);
+    assert!(
+        errors.iter().any(|e| e.contains("node_filter") && e.contains("ghost-node")),
+        "Expected hook node_filter error, got: {:?}", errors
+    );
+}
+
+#[test]
+fn semantic_check13_rejects_subflow_adp_ref_not_in_subagents() {
+    let adp = Adp {
+        adp_version: "0.1.0".into(),
+        id: "agent.test".into(),
+        runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
+        flow: serde_yaml::from_str(r#"
+graph:
+  nodes:
+    - id: "delegate"
+      kind: "subflow"
+      adp_ref: "unknown-subagent"
+  edges: []
+  start_nodes: ["delegate"]
+  end_nodes: ["delegate"]
+"#).unwrap(),
+        evaluation: serde_yaml::Value::Null,
+        subagents: Some(vec![Subagent {
+            id: "known-subagent".into(),
+            ref_uri: "./other/agent.yaml".into(),
+            description: None,
+            invocation_mode: None,
+        }]),
+        ..Default::default()
+    };
+    let errors = validate_adp_semantics(&adp);
+    assert!(
+        errors.iter().any(|e| e.contains("adp_ref") || e.contains("subagents")),
+        "Expected subflow adp_ref error, got: {:?}", errors
+    );
+}
+
+#[test]
+fn semantic_check14_rejects_evaluator_ref_not_in_x_testing() {
+    let adp = Adp {
+        adp_version: "0.1.0".into(),
+        id: "agent.test".into(),
+        runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
+        flow: minimal_flow(),
+        evaluation: serde_yaml::from_str(r#"
+suites:
+  - id: "s1"
+    metrics:
+      - id: "m1"
+        type: "deterministic"
+        function: "noop"
+        scoring: "boolean"
+        threshold: true
+        evaluator_ref: "missing-evaluator"
+"#).unwrap(),
+        x_testing: Some(serde_json::json!({
+            "evaluators": [{ "id": "known-evaluator", "type": "llm_judge", "model": "gpt-4o" }]
+        })),
+        ..Default::default()
+    };
+    let errors = validate_adp_semantics(&adp);
+    assert!(
+        errors.iter().any(|e| e.contains("evaluator_ref")),
+        "Expected evaluator_ref error, got: {:?}", errors
+    );
+}
+
+#[test]
+fn evaluator_load_unsupported_types_return_errors() {
+    for eval_type in &["deterministic", "llm_judge", "container"] {
+        let config = serde_json::json!({ "id": "e1", "type": eval_type });
+        let result = load_evaluator(&config);
+        assert!(
+            matches!(result, Err(EvaluatorError::UnsupportedType(_))),
+            "Expected UnsupportedType for {}", eval_type
+        );
+    }
+}
+
+#[test]
+fn evaluator_load_script_missing_runtime_returns_error() {
+    let config = serde_json::json!({ "id": "e1", "type": "script", "inline": "echo hi" });
+    let result = load_evaluator(&config);
+    assert!(result.is_err(), "Should fail without runtime field");
+}
+
+#[test]
+fn evaluator_load_script_non_bash_runtime_returns_unsupported() {
+    let config = serde_json::json!({
+        "id": "e1", "type": "script", "runtime": "python",
+        "inline": "def evaluate(o, c): return True"
+    });
+    let result = load_evaluator(&config);
+    assert!(
+        matches!(result, Err(EvaluatorError::UnsupportedType(_))),
+        "Expected UnsupportedType for python runtime in Rust SDK"
+    );
 }

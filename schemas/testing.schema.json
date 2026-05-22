@@ -1,0 +1,242 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://casabre.github.io/agent-definition-protocol/schemas/testing.schema.json",
+  "title": "ADP Testing v0.3.0-preview",
+  "$comment": "Breaking: aut.adapter.type no longer accepts http/grpc/stdio/docker/oci. v0.2.0 x_testing blocks using those types are valid against the v0.2.0 testing schema only.",
+  "type": "object",
+  "properties": {
+    "aut": { "$ref": "#/$defs/aut" },
+    "judges": {
+      "$comment": "Deprecated. Use evaluators[]. Kept for v0.2.0 backward compatibility.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/judge" }
+    },
+    "evaluators": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/evaluator" }
+    },
+    "checkers": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/checker" },
+      "description": "Lightweight fast-fail assertions run before evaluators."
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "max_concurrency": { "type": "integer", "minimum": 1 },
+        "timeout_per_scenario_ms": { "type": "integer", "minimum": 1 },
+        "retry_on_failure": { "type": "boolean", "default": false },
+        "max_retries": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "corpus": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/corpus_entry" }
+    },
+    "run_record": { "$ref": "#/$defs/run_record" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "source": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["oci", "git", "inline"],
+          "description": "Artifact source type."
+        },
+        "image": {
+          "type": "string",
+          "description": "OCI image reference (type=oci)."
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[a-fA-F0-9]{64}$",
+          "description": "OCI image digest for reproducibility (SHOULD). When absent, runners emit a WARNING."
+        },
+        "repo": {
+          "type": "string",
+          "description": "Git repository URL (type=git)."
+        },
+        "path": {
+          "type": "string",
+          "description": "Path within the OCI layer or git repo."
+        },
+        "ref": {
+          "type": "string",
+          "description": "Git ref (branch, tag). Prefer commit for reproducibility."
+        },
+        "commit": {
+          "type": "string",
+          "description": "Git commit SHA for reproducibility (SHOULD). When absent, runners emit a WARNING."
+        },
+        "content": {
+          "description": "Inline content (type=inline). Format-dependent."
+        }
+      },
+      "additionalProperties": false
+    },
+    "aut": {
+      "type": "object",
+      "properties": {
+        "description": { "type": "string" },
+        "execution_ref": { "type": "string", "description": "References runtime.execution[].id." },
+        "endpoint": { "type": "string", "description": "Override endpoint for testing." },
+        "timeout_seconds": { "type": "number", "minimum": 1 },
+        "env": { "type": "object", "additionalProperties": { "type": "string" } },
+        "adapter": {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "type": "string", "enum": ["function", "sdk"], "description": "Test-specific adapter types not representable in runtime.execution." },
+            "function_ref": { "type": "string" },
+            "sdk_adapter": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "judge": {
+      "type": "object",
+      "required": ["id", "provider", "model"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "provider": { "type": "string" },
+        "model": { "type": "string" },
+        "system_prompt": { "type": "string" },
+        "max_tokens": { "type": "integer", "minimum": 1 },
+        "temperature": { "type": "number", "minimum": 0.0, "maximum": 2.0 },
+        "seed": { "type": "integer" },
+        "rubric": {
+          "type": "object",
+          "properties": {
+            "source": { "$ref": "#/$defs/source" },
+            "inline": {
+              "type": "string",
+              "description": "Inline rubric text (use source for versioned rubrics)."
+            }
+          },
+          "additionalProperties": false
+        },
+        "output_schema": {
+          "type": "object",
+          "description": "JSON Schema for judge output format.",
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "evaluator": {
+      "type": "object",
+      "required": ["id", "type"],
+      "$comment": "Unified evaluator type. llm_judge fields: model, system_prompt, max_tokens, rubric_ref. script fields: runtime, inline, script_ref. container fields: image, image_digest, command, env, input_format, output_format, timeout_seconds. deterministic fields: function_ref. shared: weight, threshold.",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "type": { "type": "string", "enum": ["llm_judge", "script", "container", "deterministic"] },
+        "model": { "type": "string" },
+        "system_prompt": { "type": "string" },
+        "max_tokens": { "type": "integer", "minimum": 1 },
+        "rubric_ref": { "type": "string", "description": "Path, URI, or git+https://…@sha reference to rubric." },
+        "runtime": { "type": "string", "enum": ["python", "bash", "javascript"] },
+        "inline": { "type": "string" },
+        "script_ref": { "type": "string", "description": "Path, URI, or git+https://repo/path/eval.py@sha." },
+        "image": { "type": "string" },
+        "image_digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "command": { "type": "array", "items": { "type": "string" } },
+        "env": { "type": "object", "additionalProperties": { "type": "string" } },
+        "input_format": { "type": "string", "enum": ["json_stdin", "file"], "default": "json_stdin" },
+        "output_format": { "type": "string", "enum": ["json_stdout", "file"], "default": "json_stdout" },
+        "timeout_seconds": { "type": "number", "minimum": 1 },
+        "function_ref": { "type": "string" },
+        "weight": { "type": "number", "minimum": 0 },
+        "threshold": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        { "if": {"properties": {"type": {"const": "llm_judge"}}, "required": ["type"]}, "then": {"required": ["model"]} },
+        { "if": {"properties": {"type": {"const": "script"}}, "required": ["type"]}, "then": {"required": ["runtime"], "anyOf": [{"required": ["inline"]}, {"required": ["script_ref"]}]} },
+        { "if": {"properties": {"type": {"const": "container"}}, "required": ["type"]}, "then": {"required": ["image", "image_digest"]} },
+        { "if": {"properties": {"type": {"const": "deterministic"}}, "required": ["type"]}, "then": {"required": ["function_ref"]} }
+      ]
+    },
+    "checker": {
+      "type": "object",
+      "required": ["id", "type"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "type": { "type": "string", "enum": ["json_schema", "regex", "script"] },
+        "schema": { "type": "object", "additionalProperties": true },
+        "pattern": { "type": "string" },
+        "invert": { "type": "boolean", "default": false },
+        "runtime": { "type": "string", "enum": ["python", "bash", "javascript"] },
+        "inline": { "type": "string" },
+        "script_ref": { "type": "string" }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        { "if": {"properties": {"type": {"const": "json_schema"}}, "required": ["type"]}, "then": {"required": ["schema"]} },
+        { "if": {"properties": {"type": {"const": "regex"}}, "required": ["type"]}, "then": {"required": ["pattern"]} },
+        { "if": {"properties": {"type": {"const": "script"}}, "required": ["type"]}, "then": {"required": ["runtime"], "anyOf": [{"required": ["inline"]}, {"required": ["script_ref"]}]} }
+      ]
+    },
+    "corpus_entry": {
+      "type": "object",
+      "required": ["id", "source"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "source": { "$ref": "#/$defs/source" },
+        "format": {
+          "type": "string",
+          "enum": ["jsonl", "yaml", "csv"],
+          "default": "jsonl"
+        }
+      },
+      "additionalProperties": false
+    },
+    "run_record": {
+      "type": "object",
+      "properties": {
+        "output_format": {
+          "type": "string",
+          "enum": ["jsonl", "json", "yaml"],
+          "default": "jsonl"
+        },
+        "destination": {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["local", "s3", "gcs", "http"]
+            },
+            "path": {
+              "type": "string",
+              "description": "Local path (type=local)."
+            },
+            "bucket": {
+              "type": "string",
+              "description": "S3/GCS bucket name."
+            },
+            "prefix": {
+              "type": "string",
+              "description": "S3/GCS key prefix."
+            },
+            "endpoint": {
+              "type": "string",
+              "description": "HTTP endpoint URL (type=http)."
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
