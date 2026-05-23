@@ -11,7 +11,7 @@ import tempfile
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+
 
 
 @dataclass
@@ -90,10 +90,10 @@ def _run_script(runtime: str, script_path: str, output: dict, context: dict) -> 
     payload = json.dumps({"output": output, "context": context})
     if runtime == "python":
         wrapper = (
-            f"import json, sys\n"
-            f"_payload = json.loads(sys.stdin.read())\n"
-            f"output = _payload['output']\n"
-            f"context = _payload['context']\n"
+            "import json, sys\n"
+            "_payload = json.loads(sys.stdin.read())\n"
+            "output = _payload['output']\n"
+            "context = _payload['context']\n"
         )
         with open(script_path) as f:
             script_code = f.read()

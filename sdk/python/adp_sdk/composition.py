@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-import re
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlparse

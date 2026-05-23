@@ -15,9 +15,6 @@ def _fixtures_dir():
 
 def _make_resolver(files: dict) -> object:
     """Return a callable resolver backed by a dict mapping URI → YAML string."""
-    import yaml
-    from pathlib import Path
-
     def resolver(uri: str) -> str:
         if uri not in files:
             raise CompositionError(f"resolver: unknown URI: {uri!r}")

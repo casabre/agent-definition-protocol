@@ -6,7 +6,6 @@ from adp_sdk.evaluation import (
     ScriptEvaluator,
     DeterministicEvaluator,
     LLMJudgeEvaluator,
-    ScriptRefVerificationError,
 )
 
 
