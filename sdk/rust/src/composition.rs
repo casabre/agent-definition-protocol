@@ -930,4 +930,75 @@ evaluation:
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("does not resolve to an array"));
     }
+
+    #[test]
+    fn test_resolve_adp_filesystem_happy_path() {
+        use std::io::Write;
+        let mut tmp = tempfile::NamedTempFile::new().unwrap();
+        write!(tmp, "{}",
+            r#"adp_version: "0.1.0"
+id: "fs-test"
+runtime:
+  execution:
+    - id: "r1"
+      backend: "python"
+      entrypoint: "agent.main:app"
+flow:
+  id: "fs-test.flow"
+  graph:
+    nodes:
+      - id: "n1"
+        kind: "input"
+    edges: []
+    start_nodes: ["n1"]
+    end_nodes: ["n1"]
+evaluation:
+  suites:
+    - id: "s1"
+      metrics:
+        - id: "m1"
+          type: "deterministic"
+          function: "noop"
+          scoring: "boolean"
+          threshold: true
+"#
+        ).unwrap();
+        let path = tmp.path().to_str().unwrap().to_string();
+        let result = resolve_adp(&path, None);
+        assert!(result.is_ok(), "Expected Ok, got: {:?}", result.err());
+        assert_eq!(result.unwrap().id, "fs-test");
+    }
+
+    #[test]
+    fn test_resolve_adp_filesystem_validation_error() {
+        use std::io::Write;
+        let mut tmp = tempfile::NamedTempFile::new().unwrap();
+        write!(tmp, "{}",
+            r#"adp_version: "0.1.0"
+id: "invalid-fs"
+runtime:
+  execution: []
+flow: {}
+evaluation: {}
+"#
+        ).unwrap();
+        let path = tmp.path().to_str().unwrap().to_string();
+        let result = resolve_adp(&path, None);
+        assert!(result.is_err(), "Expected validation error for empty execution");
+        let errors = result.unwrap_err();
+        assert!(!errors.is_empty());
+    }
+
+    #[test]
+    fn test_canonicalize_path_relative_existing() {
+        let result = canonicalize_path(".");
+        assert!(result.is_ok(), "canonicalize_path('.') should succeed");
+    }
+
+    #[test]
+    fn test_canonicalize_path_relative_nonexistent() {
+        let result = canonicalize_path("__adp_no_such_path_xyz_abc_123__");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("cannot canonicalize"));
+    }
 }

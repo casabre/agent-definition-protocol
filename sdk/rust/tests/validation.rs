@@ -351,6 +351,47 @@ graph:
 }
 
 #[test]
+fn validation_rejects_conformance_class_full_with_empty_evaluation() {
+    let adp = Adp {
+        adp_version: "0.1.0".into(),
+        id: "agent.full".into(),
+        conformance_class: Some("full".into()),
+        runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
+        flow: minimal_flow(),
+        evaluation: serde_yaml::Value::Mapping(Default::default()),
+        ..Default::default()
+    };
+    let result = validate_adp(&adp);
+    assert!(result.is_err(), "Expected error for conformance_class=full with empty evaluation");
+    assert!(result.unwrap_err().to_string().contains("full"), "Error should mention 'full'");
+}
+
+#[test]
+fn semantic_validation_rejects_dangling_edge_to_node() {
+    let adp = Adp {
+        adp_version: "0.1.0".into(),
+        id: "agent.test".into(),
+        conformance_class: None,
+        runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
+        flow: serde_yaml::from_str(r#"
+graph:
+  nodes:
+    - id: "input"
+      kind: "input"
+  edges:
+    - from: "input"
+      to: "ghost-to"
+  start_nodes: ["input"]
+  end_nodes: ["input"]
+"#).unwrap(),
+        evaluation: serde_yaml::Value::Null,
+        ..Default::default()
+    };
+    let errors = validate_adp_semantics(&adp);
+    assert!(errors.iter().any(|e| e.contains("ghost-to")), "Expected dangling to-edge error, got: {:?}", errors);
+}
+
+#[test]
 fn validation_rejects_conformance_class_full_with_empty_flow() {
     let adp = Adp {
         adp_version: "0.1.0".into(),

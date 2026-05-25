@@ -205,3 +205,14 @@ pub fn load_adp(path: &str) -> Result<Adp, Box<dyn std::error::Error>> {
     let data = fs::read_to_string(Path::new(path))?;
     Ok(serde_yaml::from_str(&data)?)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_op_via_deserialization() {
+        let entry: OverrideEntry = serde_json::from_str(r#"{"path": "/id", "value": "test"}"#).unwrap();
+        assert_eq!(entry.op, "set");
+    }
+}

@@ -364,6 +364,43 @@ fn test_verify_adpkg_detects_digest_mismatch() {
 }
 
 #[test]
+fn test_verify_adpkg_index_no_manifests() {
+    let tmp = tempdir().unwrap();
+    let oci_dir = tmp.path();
+    // index.json with no "manifests" key — exercises the None branch of if let Some(manifests)
+    fs::write(
+        oci_dir.join("index.json"),
+        r#"{"schemaVersion": 2, "mediaType": "application/vnd.oci.image.index.v1+json"}"#,
+    ).unwrap();
+    let result = verify_adpkg(oci_dir.to_str().unwrap()).unwrap();
+    assert!(result.passed, "no manifests means nothing to verify");
+    assert!(result.failures.is_empty());
+}
+
+#[test]
+fn test_verify_adpkg_manifest_no_layers() {
+    let tmp = tempdir().unwrap();
+    build_source(tmp.path());
+    let oci_dir = tmp.path().join("oci");
+    create_adpkg(tmp.path().to_str().unwrap(), oci_dir.to_str().unwrap()).unwrap();
+
+    // Overwrite manifest blob with content that has no "layers" key
+    // (digest will mismatch but file opens fine, exercising the None branch of if let Some(layers))
+    let index: serde_json::Value =
+        serde_json::from_slice(&fs::read(oci_dir.join("index.json")).unwrap()).unwrap();
+    let manifest_digest = index["manifests"][0]["digest"].as_str().unwrap();
+    let manifest_path = blob_path(&oci_dir, manifest_digest);
+    let no_layers_manifest = serde_json::json!({
+        "schemaVersion": 2,
+        "config": {"digest": "sha256:000000", "size": 0}
+    });
+    fs::write(&manifest_path, serde_json::to_vec(&no_layers_manifest).unwrap()).unwrap();
+
+    let result = verify_adpkg(oci_dir.to_str().unwrap()).unwrap();
+    assert!(!result.failures.is_empty(), "digest mismatch should be reported");
+}
+
+#[test]
 fn test_verify_adpkg_missing_manifest_blob() {
     let tmp = tempdir().unwrap();
     build_source(tmp.path());
