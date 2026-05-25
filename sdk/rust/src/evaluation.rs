@@ -141,9 +141,12 @@ impl Evaluator for ScriptEvaluator {
             .map_err(|e| EvaluatorError::RuntimeError(e.to_string()))?;
 
         if let Some(mut stdin) = child.stdin.take() {
-            stdin
-                .write_all(input_str.as_bytes())
-                .map_err(|e| EvaluatorError::RuntimeError(e.to_string()))?;
+            if let Err(e) = stdin.write_all(input_str.as_bytes()) {
+                // BrokenPipe means the script exited without reading stdin — that's fine.
+                if e.kind() != std::io::ErrorKind::BrokenPipe {
+                    return Err(EvaluatorError::RuntimeError(e.to_string()));
+                }
+            }
         }
 
         let out = child
