@@ -8,7 +8,6 @@ from adp_sdk.integrations.langgraph import (
     resolve_backend,
     resolve_callable,
     _default_callable,
-    COMPAT_MATRIX,
 )
 
 

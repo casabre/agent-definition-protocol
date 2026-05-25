@@ -105,19 +105,15 @@ impl ScriptEvaluator {
     }
 
     fn resolve_script(&self) -> Result<String, EvaluatorError> {
-        if let Some(ref inline) = self.inline {
-            return Ok(inline.clone());
+        match (&self.inline, &self.script_ref) {
+            (Some(inline), _) => Ok(inline.clone()),
+            (_, Some(r)) if r.starts_with("git+") => Err(EvaluatorError::UnsupportedType(
+                "git-pinned script_ref is not supported in the Rust SDK".to_string(),
+            )),
+            (_, Some(r)) => std::fs::read_to_string(r)
+                .map_err(|e| EvaluatorError::RuntimeError(e.to_string())),
+            (None, None) => Err(EvaluatorError::MissingField("inline or script_ref".to_string())),
         }
-        if let Some(ref script_ref) = self.script_ref {
-            if script_ref.starts_with("git+") {
-                return Err(EvaluatorError::UnsupportedType(
-                    "git-pinned script_ref is not supported in the Rust SDK".to_string(),
-                ));
-            }
-            return std::fs::read_to_string(script_ref)
-                .map_err(|e| EvaluatorError::RuntimeError(e.to_string()));
-        }
-        unreachable!()
     }
 }
 
@@ -141,12 +137,7 @@ impl Evaluator for ScriptEvaluator {
             .map_err(|e| EvaluatorError::RuntimeError(e.to_string()))?;
 
         if let Some(mut stdin) = child.stdin.take() {
-            if let Err(e) = stdin.write_all(input_str.as_bytes()) {
-                // BrokenPipe means the script exited without reading stdin — that's fine.
-                if e.kind() != std::io::ErrorKind::BrokenPipe {
-                    return Err(EvaluatorError::RuntimeError(e.to_string()));
-                }
-            }
+            let _ = stdin.write_all(input_str.as_bytes()); // ignore EPIPE if script exits early
         }
 
         let out = child
@@ -170,6 +161,22 @@ impl Evaluator for ScriptEvaluator {
             .map_err(|e| EvaluatorError::RuntimeError(format!("failed to parse output: {}", e)))?;
 
         Ok(normalize_result(&raw, &self.id, "script"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_script_none_none_returns_missing_field() {
+        let ev = ScriptEvaluator {
+            id: "t".into(),
+            runtime: "bash".into(),
+            inline: None,
+            script_ref: None,
+        };
+        assert!(matches!(ev.resolve_script(), Err(EvaluatorError::MissingField(_))));
     }
 }
 

@@ -173,7 +173,10 @@ class ADPackage:
         index = json.loads((self.path / "index.json").read_text())
         for entry in index.get("manifests", []):
             self._verify_blob(entry["digest"], failures)
-            manifest = json.loads(self._blob_path(self.path / "blobs", entry["digest"]).read_bytes())
+            blob_path = self._blob_path(self.path / "blobs", entry["digest"])
+            if not blob_path.exists():
+                continue
+            manifest = json.loads(blob_path.read_bytes())
             config_desc = manifest.get("config", {})
             if config_desc.get("digest"):
                 self._verify_blob(config_desc["digest"], failures)
