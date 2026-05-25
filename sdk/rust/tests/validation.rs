@@ -1,4 +1,4 @@
-use adp_sdk::adp::{Adp, Model, Runtime, RuntimeEntry, Subagent};
+use adp_sdk::adp::{Adp, Guardrails, GuardrailRail, Model, Runtime, RuntimeEntry, Subagent, Telemetry};
 use adp_sdk::evaluation::{load_evaluator, EvaluatorError};
 use adp_sdk::validation::{validate_adp, validate_adp_semantics};
 
@@ -496,6 +496,145 @@ suites:
         errors.iter().any(|e| e.contains("evaluator_ref")),
         "Expected evaluator_ref error, got: {:?}", errors
     );
+}
+
+#[test]
+fn semantic_check7_rejects_guardrail_empty_policy_ref() {
+    let adp = Adp {
+        adp_version: "0.1.0".into(),
+        id: "agent.test".into(),
+        runtime: Runtime { execution: vec![python_entry()], ..Default::default() },
+        flow: minimal_flow(),
+        evaluation: minimal_evaluation(),
+        guardrails: Some(Guardrails {
+            input: vec![GuardrailRail { id: "g1".into(), provider: "p".into(), policy_ref: "  ".into(), ..Default::default() }],
+            output: vec![],
+            on_violation: None,
+        }),
+        ..Default::default()
+    };
+    let errors = validate_adp_semantics(&adp);
+    assert!(errors.iter().any(|e| e.contains("policy_ref")), "Expected policy_ref error, got: {:?}", errors);
+}
+
+#[test]
+fn semantic_check8_rejects_invalid_telemetry_attribute() {
+    let adp = Adp {
+        adp_version: "0.1.0".into(),
+        id: "agent.test".into(),
+        runtime: Runtime { execution: vec![python_entry()], ..Default::default() },
+        flow: minimal_flow(),
+        evaluation: minimal_evaluation(),
+        telemetry: Some(Telemetry {
+            required_attributes: vec!["invalid_attr_name".into()],
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let errors = validate_adp_semantics(&adp);
+    assert!(errors.iter().any(|e| e.contains("required_attributes")), "Expected telemetry attribute error, got: {:?}", errors);
+}
+
+#[test]
+fn semantic_check9_rejects_tool_auth_missing_env_var() {
+    let adp = Adp {
+        adp_version: "0.1.0".into(),
+        id: "agent.test".into(),
+        runtime: Runtime { execution: vec![python_entry()], ..Default::default() },
+        flow: minimal_flow(),
+        evaluation: minimal_evaluation(),
+        tools: Some(serde_json::json!({
+            "http_apis": [{ "id": "api1", "base_url": "https://example.com", "auth": { "scheme": "bearer" } }]
+        })),
+        ..Default::default()
+    };
+    let errors = validate_adp_semantics(&adp);
+    assert!(errors.iter().any(|e| e.contains("env_var")), "Expected env_var error, got: {:?}", errors);
+}
+
+#[test]
+fn semantic_check10_rejects_unknown_compliance_standard() {
+    let adp = Adp {
+        adp_version: "0.1.0".into(),
+        id: "agent.test".into(),
+        runtime: Runtime { execution: vec![python_entry()], ..Default::default() },
+        flow: minimal_flow(),
+        evaluation: minimal_evaluation(),
+        governance: Some(serde_json::json!({
+            "compliance": [{ "standard": "unknown-standard-xyz" }]
+        })),
+        ..Default::default()
+    };
+    let errors = validate_adp_semantics(&adp);
+    assert!(errors.iter().any(|e| e.contains("unknown")), "Expected compliance standard error, got: {:?}", errors);
+}
+
+#[test]
+fn semantic_check11_rejects_node_tool_ref_not_in_tools() {
+    let adp = Adp {
+        adp_version: "0.1.0".into(),
+        id: "agent.test".into(),
+        runtime: Runtime { execution: vec![python_entry()], ..Default::default() },
+        flow: serde_yaml::from_str(r#"
+id: "f"
+graph:
+  nodes:
+    - id: "n"
+      kind: "tool"
+      tool_ref: "missing-tool"
+  edges: []
+  start_nodes: ["n"]
+  end_nodes: ["n"]
+"#).unwrap(),
+        evaluation: minimal_evaluation(),
+        ..Default::default()
+    };
+    let errors = validate_adp_semantics(&adp);
+    assert!(errors.iter().any(|e| e.contains("tool_ref")), "Expected tool_ref error, got: {:?}", errors);
+}
+
+#[test]
+fn semantic_check11_passes_with_tool_ref_in_tools() {
+    let adp = Adp {
+        adp_version: "0.1.0".into(),
+        id: "agent.test".into(),
+        runtime: Runtime { execution: vec![python_entry()], ..Default::default() },
+        flow: serde_yaml::from_str(r#"
+id: "f"
+graph:
+  nodes:
+    - id: "n"
+      kind: "tool"
+      tool_ref: "known-tool"
+  edges: []
+  start_nodes: ["n"]
+  end_nodes: ["n"]
+"#).unwrap(),
+        evaluation: minimal_evaluation(),
+        tools: Some(serde_json::json!({
+            "mcp_servers": [{ "id": "known-tool", "url": "https://mcp.example" }]
+        })),
+        ..Default::default()
+    };
+    let errors = validate_adp_semantics(&adp);
+    assert!(!errors.iter().any(|e| e.contains("tool_ref")), "Expected no tool_ref error, got: {:?}", errors);
+}
+
+#[test]
+fn semantic_deprecated_judges_warning() {
+    let adp = Adp {
+        adp_version: "0.1.0".into(),
+        id: "agent.test".into(),
+        runtime: Runtime { execution: vec![python_entry()], ..Default::default() },
+        flow: minimal_flow(),
+        evaluation: minimal_evaluation(),
+        x_testing: Some(serde_json::json!({
+            "judges": [{ "id": "j1", "model": "gpt-4o", "system_prompt": "Rate 0-1" }]
+        })),
+        ..Default::default()
+    };
+    let errors = validate_adp_semantics(&adp);
+    assert!(errors.iter().any(|e| e.contains("deprecated")), "Expected deprecated judges warning, got: {:?}", errors);
 }
 
 #[test]

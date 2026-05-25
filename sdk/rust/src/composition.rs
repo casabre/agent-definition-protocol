@@ -649,4 +649,285 @@ overrides:
         let adp = result.unwrap();
         assert_eq!(adp.id, "ov-test-overridden");
     }
+
+    #[test]
+    fn test_override_delete() {
+        let mut files: HashMap<String, String> = HashMap::new();
+        let yaml = minimal_manifest("del-test").replace(
+            "id: \"del-test\"\n",
+            "id: \"del-test\"\noverrides:\n  - path: \"/conformance_class\"\n    op: \"delete\"\n",
+        );
+        files.insert("del-test".to_string(), yaml);
+        let result = resolve_adp("del-test", Some(make_resolver(files)));
+        assert!(result.is_ok(), "delete override should succeed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_override_append() {
+        let mut files: HashMap<String, String> = HashMap::new();
+        let yaml = format!(
+            r#"adp_version: "0.1.0"
+id: "app-test"
+runtime:
+  execution:
+    - id: "r1"
+      backend: "python"
+      entrypoint: "agent.main:app"
+flow:
+  id: "app-test.flow"
+  graph:
+    nodes:
+      - id: "n1"
+        kind: "input"
+    edges: []
+    start_nodes: ["n1"]
+    end_nodes: ["n1"]
+evaluation:
+  suites:
+    - id: "s1"
+      metrics:
+        - id: "m1"
+          type: "deterministic"
+          function: "noop"
+          scoring: "boolean"
+          threshold: true
+overrides:
+  - path: "/runtime/execution"
+    op: "append"
+    value:
+      id: "r2"
+      backend: "python"
+      entrypoint: "agent.alt:app"
+"#
+        );
+        files.insert("app-test".to_string(), yaml);
+        let result = resolve_adp("app-test", Some(make_resolver(files)));
+        assert!(result.is_ok(), "append override should succeed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_override_unknown_op_returns_error() {
+        let data = serde_json::json!({"id": "x", "runtime": {"execution": []}});
+        let result = apply_override(data, "/id", "noop", Some(serde_json::json!("y")));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("unknown override op"));
+    }
+
+    #[test]
+    fn test_override_set_array_index() {
+        let data = serde_json::json!({"items": ["a", "b", "c"]});
+        let result = apply_override(data, "/items/1", "set", Some(serde_json::json!("X")));
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap()["items"][1], "X");
+    }
+
+    #[test]
+    fn test_override_path_must_start_with_slash() {
+        let data = serde_json::json!({"id": "x"});
+        let result = apply_override(data, "id", "set", Some(serde_json::json!("y")));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("must start with '/'"));
+    }
+
+    #[test]
+    fn test_override_set_missing_key_returns_error() {
+        let data = serde_json::json!({"id": "x"});
+        let result = apply_override(data, "/nonexistent", "set", Some(serde_json::json!("y")));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("does not exist"));
+    }
+
+    #[test]
+    fn test_navigate_mut_into_array() {
+        let mut data = serde_json::json!({"items": ["a", "b"]});
+        let result = navigate_mut(&mut data, &["items".to_string(), "0".to_string()], "/items/0", false);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_navigate_mut_scalar_error() {
+        let mut data = serde_json::json!({"val": 42});
+        let result = navigate_mut(&mut data, &["val".to_string(), "sub".to_string()], "/val/sub", false);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("cannot navigate into scalar"));
+    }
+
+    #[test]
+    fn test_navigate_mut_allow_missing_returns_none() {
+        let mut data = serde_json::json!({"a": {"b": 1}});
+        let result = navigate_mut(&mut data, &["missing".to_string()], "/missing", true);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_navigate_mut_missing_key_error() {
+        let mut data = serde_json::json!({"a": 1});
+        let result = navigate_mut(&mut data, &["missing".to_string()], "/missing", false);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not found"));
+    }
+
+    #[test]
+    fn test_navigate_mut_array_out_of_bounds() {
+        let mut data = serde_json::json!({"items": ["a"]});
+        let result = navigate_mut(&mut data, &["items".to_string(), "99".to_string()], "/items/99", false);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("out of bounds"));
+    }
+
+    #[test]
+    fn test_pointer_get_mut_array() {
+        let mut data = serde_json::json!({"items": ["x", "y"]});
+        if let JsonValue::Object(ref mut map) = data {
+            let node = map.get_mut("items").unwrap();
+            let result = pointer_get_mut(node, "1", "/items/1");
+            assert!(result.is_ok());
+        }
+    }
+
+    #[test]
+    fn test_pointer_get_mut_scalar_error() {
+        let mut data = serde_json::json!(42_i64);
+        let result = pointer_get_mut(&mut data, "x", "/x");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("cannot navigate into scalar"));
+    }
+
+    #[test]
+    fn test_pointer_get_mut_key_not_found() {
+        let mut data = serde_json::json!({"a": 1});
+        let result = pointer_get_mut(&mut data, "missing", "/missing");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not found"));
+    }
+
+    #[test]
+    fn test_pointer_get_mut_array_out_of_bounds() {
+        let mut data = serde_json::json!(["x"]);
+        let result = pointer_get_mut(&mut data, "5", "/5");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("out of bounds"));
+    }
+
+    #[test]
+    fn test_parse_index_non_integer() {
+        let result = parse_index("abc", "/items/abc");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not an integer"));
+    }
+
+    #[test]
+    fn test_unescape_pointer_tilde_sequences() {
+        assert_eq!(unescape_pointer("a~1b"), "a/b");
+        assert_eq!(unescape_pointer("a~0b"), "a~b");
+        assert_eq!(unescape_pointer("~01"), "~1");
+    }
+
+    #[test]
+    fn test_resolve_uri_impl_absolute_passthrough() {
+        let result = resolve_uri_impl("https://example.com/base.yaml", "local/base", false);
+        assert_eq!(result.unwrap(), "https://example.com/base.yaml");
+    }
+
+    #[test]
+    fn test_resolve_uri_impl_registry_error() {
+        let result = resolve_uri_impl("registry://foo/bar", "local/base", false);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("registry://"));
+    }
+
+    #[test]
+    fn test_deep_merge_null_removes_key() {
+        let base = serde_json::json!({"a": 1, "b": 2});
+        let overlay = serde_json::json!({"b": null});
+        let merged = deep_merge(base, overlay);
+        assert!(merged.get("a").is_some());
+        assert!(merged.get("b").is_none());
+    }
+
+    #[test]
+    fn test_deep_merge_non_object() {
+        let base = serde_json::json!([1, 2, 3]);
+        let overlay = serde_json::json!([4, 5]);
+        let merged = deep_merge(base, overlay);
+        assert_eq!(merged, serde_json::json!([4, 5]));
+    }
+
+    #[test]
+    fn test_additive_merge_array_with_non_array_module_wins() {
+        let base = serde_json::json!({"items": ["a", "b"]});
+        let module = serde_json::json!({"items": "not-an-array"});
+        let merged = additive_merge(base, module);
+        assert_eq!(merged["items"], "not-an-array");
+    }
+
+    #[test]
+    fn test_additive_merge_object_with_non_object_module_wins() {
+        let base = serde_json::json!({"nested": {"x": 1}});
+        let module = serde_json::json!({"nested": "scalar"});
+        let merged = additive_merge(base, module);
+        assert_eq!(merged["nested"], "scalar");
+    }
+
+    #[test]
+    fn test_additive_merge_non_object_module_wins() {
+        let base = serde_json::json!([1, 2]);
+        let module = serde_json::json!([3, 4]);
+        let merged = additive_merge(base, module);
+        assert_eq!(merged, serde_json::json!([3, 4]));
+    }
+
+    #[test]
+    fn test_depth_exceeded_returns_error() {
+        let mut files: HashMap<String, String> = HashMap::new();
+        // Chain of 12 manifests: d0 extends d1 extends d2 ... extends d11
+        for i in 0..12usize {
+            let next = i + 1;
+            let yaml = if i < 11 {
+                format!(
+                    r#"adp_version: "0.1.0"
+id: "d{i}"
+extends: "d{next}"
+runtime:
+  execution:
+    - id: "r1"
+      backend: "python"
+      entrypoint: "main:app"
+flow:
+  id: "f"
+  graph:
+    nodes: [{{id: "n", kind: "input"}}]
+    edges: []
+    start_nodes: ["n"]
+    end_nodes: ["n"]
+evaluation:
+  suites:
+    - id: "s"
+      metrics:
+        - id: "m"
+          type: "deterministic"
+          function: "noop"
+          scoring: "boolean"
+          threshold: true
+"#
+                )
+            } else {
+                minimal_manifest(&format!("d{i}"))
+            };
+            files.insert(format!("d{i}"), yaml);
+        }
+        let result = resolve_adp("d0", Some(make_resolver(files)));
+        assert!(result.is_err());
+        let combined = result.unwrap_err().join(" ");
+        assert!(combined.contains("depth"), "Expected depth error, got: {combined}");
+    }
+
+    #[test]
+    fn test_override_append_non_array_returns_error() {
+        let data = serde_json::json!({"id": "x"});
+        let result = apply_override(data, "/id", "append", Some(serde_json::json!("extra")));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("does not resolve to an array"));
+    }
 }

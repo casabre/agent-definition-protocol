@@ -90,7 +90,9 @@ jobs:
       - name: Cargo coverage
         run: |
           cd sdk/rust
-          cargo llvm-cov --all-features --locked --lcov --output-path coverage.lcov --fail-under-lines 100
+          cargo llvm-cov --all-features --locked --no-report
+          cargo llvm-cov report --text --fail-under-lines 100
+          cargo llvm-cov report --lcov --output-path coverage.lcov
       - name: Upload Rust coverage
         if: always()
         uses: actions/upload-artifact@v4

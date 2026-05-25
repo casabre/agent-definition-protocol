@@ -166,6 +166,10 @@ pub struct Adp {
     pub streaming: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub x_testing: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tools: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub governance: Option<serde_json::Value>,
 }
 
 impl Default for Adp {
@@ -191,6 +195,8 @@ impl Default for Adp {
             pipeline: None,
             streaming: None,
             x_testing: None,
+            tools: None,
+            governance: None,
         }
     }
 }
