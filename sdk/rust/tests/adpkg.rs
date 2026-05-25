@@ -1,6 +1,6 @@
 use std::fs;
 use tempfile::tempdir;
-use adp_sdk::adpkg::{create_adpkg, open_adpkg};
+use adp_sdk::adpkg::{blob_path, create_adpkg, inspect_adpkg, open_adpkg, verify_adpkg};
 
 fn build_source(dir: &std::path::Path) {
     let adp_dir = dir.join("adp");
@@ -286,4 +286,96 @@ evaluation:
     let adp = open_adpkg(oci_dir.to_str().unwrap()).unwrap();
     assert_eq!(adp.id, "agent.v0.1.0");
     assert_eq!(adp.adp_version, "0.1.0");
+}
+
+#[test]
+fn test_inspect_adpkg() {
+    let tmp = tempdir().unwrap();
+    build_source(tmp.path());
+    let oci_dir = tmp.path().join("oci");
+    create_adpkg(tmp.path().to_str().unwrap(), oci_dir.to_str().unwrap()).unwrap();
+
+    let result = inspect_adpkg(oci_dir.to_str().unwrap()).unwrap();
+    assert_eq!(result.agent_id, "agent.test");
+    assert_eq!(result.adp_version, "0.1.0");
+    assert_eq!(result.layer_count, 1);
+    assert_eq!(result.config["agent_id"], "agent.test");
+}
+
+#[test]
+fn test_inspect_adpkg_missing_index() {
+    let tmp = tempdir().unwrap();
+    let result = inspect_adpkg(tmp.path().to_str().unwrap());
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_verify_adpkg_passes_intact() {
+    let tmp = tempdir().unwrap();
+    build_source(tmp.path());
+    let oci_dir = tmp.path().join("oci");
+    create_adpkg(tmp.path().to_str().unwrap(), oci_dir.to_str().unwrap()).unwrap();
+
+    let result = verify_adpkg(oci_dir.to_str().unwrap()).unwrap();
+    assert!(result.passed);
+    assert!(result.failures.is_empty());
+}
+
+#[test]
+fn test_verify_adpkg_detects_missing_blob() {
+    let tmp = tempdir().unwrap();
+    build_source(tmp.path());
+    let oci_dir = tmp.path().join("oci");
+    create_adpkg(tmp.path().to_str().unwrap(), oci_dir.to_str().unwrap()).unwrap();
+
+    // Delete the config blob (deterministic: read from manifest)
+    let index: serde_json::Value = serde_json::from_slice(&fs::read(oci_dir.join("index.json")).unwrap()).unwrap();
+    let manifest_digest = index["manifests"][0]["digest"].as_str().unwrap();
+    let manifest: serde_json::Value = serde_json::from_slice(
+        &fs::read(blob_path(&oci_dir, manifest_digest)).unwrap()
+    ).unwrap();
+    let config_digest = manifest["config"]["digest"].as_str().unwrap();
+    fs::remove_file(blob_path(&oci_dir, config_digest)).unwrap();
+
+    let result = verify_adpkg(oci_dir.to_str().unwrap()).unwrap();
+    assert!(!result.passed);
+    assert!(result.failures.iter().any(|f| f.contains("missing")));
+}
+
+#[test]
+fn test_verify_adpkg_detects_digest_mismatch() {
+    let tmp = tempdir().unwrap();
+    build_source(tmp.path());
+    let oci_dir = tmp.path().join("oci");
+    create_adpkg(tmp.path().to_str().unwrap(), oci_dir.to_str().unwrap()).unwrap();
+
+    // Tamper with the config blob
+    let index: serde_json::Value = serde_json::from_slice(&fs::read(oci_dir.join("index.json")).unwrap()).unwrap();
+    let manifest_digest = index["manifests"][0]["digest"].as_str().unwrap();
+    let manifest: serde_json::Value = serde_json::from_slice(
+        &fs::read(blob_path(&oci_dir, manifest_digest)).unwrap()
+    ).unwrap();
+    let config_digest = manifest["config"]["digest"].as_str().unwrap();
+    fs::write(blob_path(&oci_dir, config_digest), b"tampered").unwrap();
+
+    let result = verify_adpkg(oci_dir.to_str().unwrap()).unwrap();
+    assert!(!result.passed);
+    assert!(result.failures.iter().any(|f| f.contains("mismatch")));
+}
+
+#[test]
+fn test_verify_adpkg_missing_manifest_blob() {
+    let tmp = tempdir().unwrap();
+    build_source(tmp.path());
+    let oci_dir = tmp.path().join("oci");
+    create_adpkg(tmp.path().to_str().unwrap(), oci_dir.to_str().unwrap()).unwrap();
+
+    // Delete the manifest blob itself — verify_adpkg should still report it missing
+    let index: serde_json::Value = serde_json::from_slice(&fs::read(oci_dir.join("index.json")).unwrap()).unwrap();
+    let manifest_digest = index["manifests"][0]["digest"].as_str().unwrap();
+    fs::remove_file(blob_path(&oci_dir, manifest_digest)).unwrap();
+
+    let result = verify_adpkg(oci_dir.to_str().unwrap()).unwrap();
+    assert!(!result.passed);
+    assert!(result.failures.iter().any(|f| f.contains("missing")));
 }

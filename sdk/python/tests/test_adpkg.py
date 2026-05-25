@@ -464,18 +464,39 @@ def test_verify_passes_intact_package(tmp_path: Path):
 
 
 def test_verify_detects_missing_blob(tmp_path: Path):
-    """Test that verify() detects a missing blob file."""
+    """Test that verify() detects a missing blob file (config/layer)."""
     src = build_source(tmp_path)
     pkg_dir = tmp_path / "oci"
     pkg = ADPackage.create_from_directory(src, pkg_dir)
 
-    # Delete one blob to create a missing-blob failure
-    blobs = list((pkg_dir / "blobs" / "sha256").glob("*"))
-    blobs[0].unlink()
+    # Specifically delete the config blob (deterministic: read from manifest)
+    index = json.loads((pkg_dir / "index.json").read_text())
+    manifest_desc = index["manifests"][0]
+    manifest = json.loads(
+        (pkg_dir / "blobs" / "sha256" / manifest_desc["digest"].split(":")[1]).read_bytes()
+    )
+    config_hex = manifest["config"]["digest"].split(":")[1]
+    (pkg_dir / "blobs" / "sha256" / config_hex).unlink()
 
     result = pkg.verify()
     assert result["passed"] is False
     assert len(result["failures"]) > 0
+    assert any("missing" in f for f in result["failures"])
+
+
+def test_verify_detects_missing_manifest_blob(tmp_path: Path):
+    """Test that verify() skips inner-blob checks when the manifest blob itself is missing."""
+    src = build_source(tmp_path)
+    pkg_dir = tmp_path / "oci"
+    pkg = ADPackage.create_from_directory(src, pkg_dir)
+
+    # Delete the manifest blob specifically to exercise the `continue` guard
+    index = json.loads((pkg_dir / "index.json").read_text())
+    manifest_hex = index["manifests"][0]["digest"].split(":")[1]
+    (pkg_dir / "blobs" / "sha256" / manifest_hex).unlink()
+
+    result = pkg.verify()
+    assert result["passed"] is False
     assert any("missing" in f for f in result["failures"])
 
 
