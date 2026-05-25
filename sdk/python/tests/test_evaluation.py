@@ -262,8 +262,6 @@ def test_resolve_script_ref_plain_path():
 
 def test_resolve_script_ref_cached(tmp_path):
     """_resolve_script_ref returns cached path when sentinel file exists."""
-    import re
-    from adp_sdk.evaluation import _GIT_REF_RE, _CACHE_DIR
     # Build a synthetic cache: create sentinel file so the cached path is returned
     sha = "a" * 7
     cache_dir = tmp_path / sha
