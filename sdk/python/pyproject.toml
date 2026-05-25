@@ -14,8 +14,11 @@ dependencies = ["pydantic>=2.6", "pyyaml>=6.0", "jsonschema>=4.21"]
 [tool.setuptools]
 packages = ["adp_sdk", "adp_sdk.integrations"]
 
+[tool.pytest.ini_options]
+addopts = "--cov=adp_sdk --cov-report=term-missing --cov-fail-under=100"
+
 [project.optional-dependencies]
-test = ["pytest"]
+test = ["pytest", "pytest-cov"]
 langgraph = ["langgraph>=0.2"]
 autogen = ["pyautogen>=0.4"]
 crewai = ["crewai>=0.63"]

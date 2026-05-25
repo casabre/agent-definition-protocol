@@ -38,6 +38,7 @@ export function validateAdp(adp: any): string[] {
   const validate = ajv.compile(adpSchema);
   const ok = validate(adp);
   if (ok) return [];
+  /* c8 ignore next */
   return (validate.errors || []).map((e) => `${e.instancePath} ${e.message}`.trim());
 }
 

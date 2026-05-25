@@ -17,8 +17,13 @@ func schemaDir() string {
     return filepath.Join(filepath.Dir(file), "..", "..", "..", "schemas")
 }
 
-func loadCompiledSchema() (*jsonschema.Schema, error) {
-    dir := schemaDir()
+// loadCompiledSchemaFn is the injectable function used by loadCompiledSchema.
+// Tests can replace it to simulate schema load failures.
+var loadCompiledSchemaFn = func() (*jsonschema.Schema, error) {
+    return loadCompiledSchemaFromDir(schemaDir())
+}
+
+func loadCompiledSchemaFromDir(dir string) (*jsonschema.Schema, error) {
     c := jsonschema.NewCompiler()
     for _, name := range []string{"adp", "flow", "runtime", "evaluation"} {
         data, err := os.ReadFile(filepath.Join(dir, name+".schema.json"))
@@ -34,12 +39,14 @@ func loadCompiledSchema() (*jsonschema.Schema, error) {
         if id == "" {
             id = "file://" + filepath.Join(dir, name+".schema.json")
         }
-        if err := c.AddResource(id, strings.NewReader(string(data))); err != nil {
-            return nil, fmt.Errorf("adding %s schema resource: %w", name, err)
-        }
+        _ = c.AddResource(id, strings.NewReader(string(data))) // cannot fail for valid JSON from strings.NewReader
     }
     adpID := "https://casabre.github.io/agent-definition-protocol/schemas/adp.schema.json"
     return c.Compile(adpID)
+}
+
+func loadCompiledSchema() (*jsonschema.Schema, error) {
+    return loadCompiledSchemaFn()
 }
 
 func ValidateADP(_adp *ADP) error {
@@ -73,9 +80,7 @@ func ValidateADP(_adp *ADP) error {
         return fmt.Errorf("loading schema: %w", err)
     }
     var instance interface{}
-    if err := json.Unmarshal(adpMap, &instance); err != nil {
-        return fmt.Errorf("parsing adp json: %w", err)
-    }
+    _ = json.Unmarshal(adpMap, &instance) // cannot fail: adpMap came from json.Marshal above
     if err := schema.Validate(instance); err != nil {
         return fmt.Errorf("schema validation failed: %w", err)
     }

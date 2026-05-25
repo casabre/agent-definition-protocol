@@ -346,3 +346,358 @@ def test_semantic_validation_check14_evaluator_ref():
     errors = validate_adp_semantics(adp)
     assert any("evaluator_ref" in e for e in errors), f"Expected evaluator_ref error, got: {errors}"
 
+
+def test_validate_conformance_class_full_rejects_empty_evaluation():
+    """validate_adp returns error when conformance_class=full but evaluation is empty."""
+    adp = ADP(
+        adp_version="0.1.0",
+        id="agent.full-no-eval",
+        conformance_class="full",
+        runtime=RuntimeModel(execution=[
+            RuntimeEntry(backend="python", id="py", entrypoint="main:app")
+        ]),
+        flow={
+            "id": "f",
+            "graph": {
+                "nodes": [{"id": "n", "kind": "input"}],
+                "edges": [],
+                "start_nodes": ["n"],
+                "end_nodes": ["n"],
+            }
+        },
+        evaluation=EvaluationModel(),
+    )
+    errors = validate_adp(adp)
+    assert any("full" in e and "evaluation" in e for e in errors), \
+        f"Expected conformance_class 'full' + empty evaluation error, got: {errors}"
+
+
+def test_semantic_validation_warns_on_unresolved_extends():
+    """validate_adp_semantics warns when manifest still has extends/import fields."""
+    adp = ADP(
+        adp_version="0.1.0",
+        id="agent.unresolved",
+        extends="/some/base.yaml",
+        runtime=RuntimeModel(execution=[
+            RuntimeEntry(backend="python", id="py", entrypoint="main:app")
+        ]),
+        flow=FlowModel(),
+        evaluation=EvaluationModel(),
+    )
+    errors = validate_adp_semantics(adp)
+    assert any("WARNING" in e and "extends" in e for e in errors), \
+        f"Expected unresolved composition warning, got: {errors}"
+
+
+def test_semantic_validation_duplicate_node_id():
+    """validate_adp_semantics detects duplicate node IDs directly (no fixture needed)."""
+    adp = ADP(
+        adp_version="0.1.0",
+        id="agent.dup-node",
+        runtime=RuntimeModel(execution=[
+            RuntimeEntry(backend="python", id="py", entrypoint="main:app")
+        ]),
+        flow={
+            "id": "f",
+            "graph": {
+                "nodes": [{"id": "dup", "kind": "input"}, {"id": "dup", "kind": "output"}],
+                "edges": [],
+                "start_nodes": ["dup"],
+                "end_nodes": ["dup"],
+            }
+        },
+        evaluation=EvaluationModel(),
+    )
+    errors = validate_adp_semantics(adp)
+    assert any("duplicate" in e for e in errors), f"Expected duplicate node error, got: {errors}"
+
+
+def test_semantic_validation_edge_from_missing():
+    """validate_adp_semantics detects edge where from-node doesn't exist."""
+    adp = ADP(
+        adp_version="0.1.0",
+        id="agent.bad-edge-from",
+        runtime=RuntimeModel(execution=[
+            RuntimeEntry(backend="python", id="py", entrypoint="main:app")
+        ]),
+        flow={
+            "id": "f",
+            "graph": {
+                "nodes": [{"id": "output", "kind": "output"}],
+                "edges": [{"from": "ghost", "to": "output"}],
+                "start_nodes": [],
+                "end_nodes": ["output"],
+            }
+        },
+        evaluation=EvaluationModel(),
+    )
+    errors = validate_adp_semantics(adp)
+    assert any("ghost" in e for e in errors), f"Expected dangling edge error, got: {errors}"
+
+
+def test_semantic_validation_edge_to_missing():
+    """validate_adp_semantics detects edge where to-node doesn't exist."""
+    adp = ADP(
+        adp_version="0.1.0",
+        id="agent.bad-edge-to",
+        runtime=RuntimeModel(execution=[
+            RuntimeEntry(backend="python", id="py", entrypoint="main:app")
+        ]),
+        flow={
+            "id": "f",
+            "graph": {
+                "nodes": [{"id": "input", "kind": "input"}],
+                "edges": [{"from": "input", "to": "nonexistent"}],
+                "start_nodes": ["input"],
+                "end_nodes": [],
+            }
+        },
+        evaluation=EvaluationModel(),
+    )
+    errors = validate_adp_semantics(adp)
+    assert any("nonexistent" in e for e in errors), f"Expected missing to-node error, got: {errors}"
+
+
+def test_semantic_validation_bad_start_node():
+    """validate_adp_semantics detects start_node not in graph.nodes."""
+    adp = ADP(
+        adp_version="0.1.0",
+        id="agent.bad-start",
+        runtime=RuntimeModel(execution=[
+            RuntimeEntry(backend="python", id="py", entrypoint="main:app")
+        ]),
+        flow={
+            "id": "f",
+            "graph": {
+                "nodes": [{"id": "real-node", "kind": "input"}],
+                "edges": [],
+                "start_nodes": ["ghost-start"],
+                "end_nodes": ["real-node"],
+            }
+        },
+        evaluation=EvaluationModel(),
+    )
+    errors = validate_adp_semantics(adp)
+    assert any("start_node" in e and "ghost-start" in e for e in errors), \
+        f"Expected start_node error, got: {errors}"
+
+
+def test_semantic_validation_bad_end_node():
+    """validate_adp_semantics detects end_node not in graph.nodes."""
+    adp = ADP(
+        adp_version="0.1.0",
+        id="agent.bad-end",
+        runtime=RuntimeModel(execution=[
+            RuntimeEntry(backend="python", id="py", entrypoint="main:app")
+        ]),
+        flow={
+            "id": "f",
+            "graph": {
+                "nodes": [{"id": "real-node", "kind": "output"}],
+                "edges": [],
+                "start_nodes": ["real-node"],
+                "end_nodes": ["ghost-end"],
+            }
+        },
+        evaluation=EvaluationModel(),
+    )
+    errors = validate_adp_semantics(adp)
+    assert any("end_node" in e and "ghost-end" in e for e in errors), \
+        f"Expected end_node error, got: {errors}"
+
+
+def test_semantic_validation_empty_guardrail_policy_ref():
+    """validate_adp_semantics detects guardrail with empty policy_ref."""
+    import yaml as _yaml
+    adp_yaml = """
+adp_version: "0.1.0"
+id: "agent.guardrail-empty-ref"
+runtime:
+  execution:
+    - backend: python
+      id: py
+      entrypoint: main:app
+flow: {}
+evaluation: {}
+guardrails:
+  input:
+    - id: rail1
+      provider: guardrails-ai
+      policy_ref: ""
+      mode: block
+  on_violation: block
+"""
+    adp = ADP.model_validate(_yaml.safe_load(adp_yaml))
+    errors = validate_adp_semantics(adp)
+    assert any("policy_ref" in e for e in errors), f"Expected policy_ref error, got: {errors}"
+
+
+def test_semantic_validation_invalid_telemetry_attribute():
+    """validate_adp_semantics detects invalid telemetry.required_attributes entry."""
+    import yaml as _yaml
+    adp_yaml = """
+adp_version: "0.1.0"
+id: "agent.telemetry"
+runtime:
+  execution:
+    - backend: python
+      id: py
+      entrypoint: main:app
+flow: {}
+evaluation: {}
+telemetry:
+  required_attributes:
+    - invalid_attr_name
+"""
+    adp = ADP.model_validate(_yaml.safe_load(adp_yaml))
+    errors = validate_adp_semantics(adp)
+    assert any("invalid_attr_name" in e for e in errors), \
+        f"Expected telemetry attribute error, got: {errors}"
+
+
+def test_semantic_validation_tool_auth_missing_env_var():
+    """validate_adp_semantics detects tool with auth.scheme != 'none' but no env_var."""
+    import yaml as _yaml
+    adp_yaml = """
+adp_version: "0.1.0"
+id: "agent.tool-auth"
+runtime:
+  execution:
+    - backend: python
+      id: py
+      entrypoint: main:app
+flow: {}
+evaluation: {}
+tools:
+  http_apis:
+    - id: billing-api
+      description: Billing
+      base_url: https://billing.example
+      auth:
+        scheme: bearer
+        env_var: ""
+"""
+    adp = ADP.model_validate(_yaml.safe_load(adp_yaml))
+    errors = validate_adp_semantics(adp)
+    assert any("env_var" in e for e in errors), f"Expected env_var error, got: {errors}"
+
+
+def test_semantic_validation_unknown_compliance_standard():
+    """validate_adp_semantics detects unknown compliance standard."""
+    import yaml as _yaml
+    adp_yaml = """
+adp_version: "0.1.0"
+id: "agent.compliance"
+runtime:
+  execution:
+    - backend: python
+      id: py
+      entrypoint: main:app
+flow: {}
+evaluation: {}
+governance:
+  compliance:
+    - standard: unknown-standard-xyz
+      status: compliant
+"""
+    adp = ADP.model_validate(_yaml.safe_load(adp_yaml))
+    errors = validate_adp_semantics(adp)
+    assert any("unknown-standard-xyz" in e for e in errors), \
+        f"Expected unknown compliance standard error, got: {errors}"
+
+
+def test_semantic_validation_tool_ref_missing():
+    """validate_adp_semantics detects node with tool_ref not in tools."""
+    import yaml as _yaml
+    adp_yaml = """
+adp_version: "0.1.0"
+id: "agent.tool-ref"
+runtime:
+  execution:
+    - backend: python
+      id: py
+      entrypoint: main:app
+flow:
+  id: f
+  graph:
+    nodes:
+      - id: input
+        kind: input
+      - id: fetch
+        kind: tool
+        tool_ref: nonexistent-tool
+    edges: []
+    start_nodes: [input]
+    end_nodes: [fetch]
+evaluation: {}
+"""
+    adp = ADP.model_validate(_yaml.safe_load(adp_yaml))
+    errors = validate_adp_semantics(adp)
+    assert any("tool_ref" in e for e in errors), f"Expected tool_ref error, got: {errors}"
+
+
+def test_semantic_validation_judges_deprecation_warning():
+    """validate_adp_semantics returns deprecation warning for judges[] without evaluators[]."""
+    import yaml as _yaml
+    adp_yaml = """
+adp_version: "0.1.0"
+id: "agent.judges"
+runtime:
+  execution:
+    - backend: python
+      id: py
+      entrypoint: main:app
+flow: {}
+evaluation: {}
+x_testing:
+  judges:
+    - id: j1
+      type: llm_judge
+      model: gpt-4o
+"""
+    adp = ADP.model_validate(_yaml.safe_load(adp_yaml))
+    errors = validate_adp_semantics(adp)
+    assert any("deprecated" in e.lower() or "judges" in e for e in errors), \
+        f"Expected judges deprecation warning, got: {errors}"
+
+
+def test_semantic_validation_evaluator_ref_via_judges():
+    """validate_adp_semantics: evaluator_ref resolved via x_testing.judges[] IDs."""
+    import yaml as _yaml
+    # evaluator_ref matches a judge ID → no error
+    adp_yaml = """
+adp_version: "0.1.0"
+id: "agent.judge-ref"
+runtime:
+  execution:
+    - backend: python
+      id: py
+      entrypoint: main:app
+flow: {}
+evaluation:
+  suites:
+    - id: suite1
+      metrics:
+        - id: m1
+          type: deterministic
+          threshold: 1.0
+          evaluator_ref: j1
+x_testing:
+  judges:
+    - id: j1
+      type: llm_judge
+      model: gpt-4o
+  evaluators:
+    - id: ev1
+      type: script
+      runtime: python
+      inline: "def evaluate(o, c): return True"
+"""
+    adp = ADP.model_validate(_yaml.safe_load(adp_yaml))
+    errors = validate_adp_semantics(adp)
+    # j1 is in judges AND evaluators are present, so evaluator_ref j1 should be resolved
+    # The judge IDs are added to testing_evaluator_ids when evaluators also exist
+    # evaluator_ref "j1" should be found in testing_evaluator_ids (populated from both)
+    assert not any("evaluator_ref" in e for e in errors), \
+        f"Expected evaluator_ref j1 to resolve via judges[], got: {errors}"
+

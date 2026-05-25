@@ -44,3 +44,17 @@ def test_model_ref_resolved_from_runtime(simple_manifest):
     assert chat_step["model_ref"] == "gpt4"
     assert chat_step.get("provider") == "openai"
     assert chat_step.get("model") == "gpt-4o-mini"
+
+
+def test_resolve_model_returns_none_for_none_ref():
+    """_resolve_model returns None when model_ref is None (line 26 branch)."""
+    from adp_sdk.integrations.semantic_kernel import _resolve_model
+    result = _resolve_model(None, [{"id": "m1", "provider": "openai", "model": "gpt-4o"}])
+    assert result is None
+
+
+def test_resolve_model_returns_none_for_unknown_ref():
+    """_resolve_model returns None when no model matches the ref (line 30 branch)."""
+    from adp_sdk.integrations.semantic_kernel import _resolve_model
+    result = _resolve_model("nonexistent", [{"id": "m1"}, {"id": "m2"}])
+    assert result is None

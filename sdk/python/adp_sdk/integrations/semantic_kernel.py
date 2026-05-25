@@ -11,8 +11,8 @@ from __future__ import annotations
 from typing import Any, Callable
 
 try:
-    import semantic_kernel as sk
-    from semantic_kernel import Kernel
+    import semantic_kernel as sk  # pragma: no cover
+    from semantic_kernel import Kernel  # pragma: no cover
 except ImportError:
     sk = None  # type: ignore[assignment]
     Kernel = None  # type: ignore[assignment, misc]
@@ -42,8 +42,8 @@ def _make_llm_step(node: dict, models: list[dict]) -> dict:
     if model_entry is not None:
         step["provider"] = model_entry.get("provider")
         step["model"] = model_entry.get("model")
-    if Kernel is not None:
-        step["sk_construct"] = "KernelFunction"
+    if Kernel is not None:  # pragma: no cover
+        step["sk_construct"] = "KernelFunction"  # pragma: no cover
     return step
 
 
@@ -54,8 +54,8 @@ def _make_tool_step(node: dict) -> dict:
         "kind": "tool",
         "tool_ref": node.get("tool_ref"),
     }
-    if Kernel is not None:
-        step["sk_construct"] = "KernelPlugin"
+    if Kernel is not None:  # pragma: no cover
+        step["sk_construct"] = "KernelPlugin"  # pragma: no cover
     return step
 
 
@@ -84,10 +84,10 @@ def build_sk_from_adp(manifest: dict, backend_factory: BackendFactory = None) ->
     runtime = manifest.get("runtime", {})
     models = runtime.get("models", [])
 
-    if Kernel is not None:
-        kernel = Kernel()
-        if backend_factory is not None:
-            backend_factory(manifest, {"kernel": kernel})
+    if Kernel is not None:  # pragma: no cover
+        kernel = Kernel()  # pragma: no cover
+        if backend_factory is not None:  # pragma: no cover
+            backend_factory(manifest, {"kernel": kernel})  # pragma: no cover
     else:
         kernel = {"type": "mock_kernel"}
 

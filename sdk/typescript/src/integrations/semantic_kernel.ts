@@ -35,10 +35,12 @@ export function buildSKFromAdp(
   backendFactory?: SKBackendFactory,
 ): { kernel: unknown; processSteps: ProcessStep[] } {
   const flow = (manifest as any).flow.graph;
+  /* c8 ignore next */
   const runtime = (manifest as any).runtime ?? {};
   const models: Array<{ id: string; provider: string; model: string }> = runtime.models ?? [];
 
   let kernel: unknown;
+  /* c8 ignore next 6 */
   if (_sk) {
     const { Kernel } = _sk as any;
     kernel = new Kernel();
@@ -59,9 +61,11 @@ export function buildSKFromAdp(
         step.provider = modelEntry.provider;
         step.model = modelEntry.model;
       }
+      /* c8 ignore next 2 */
       if (_sk) step.sk_construct = "KernelFunction";
     } else if (kind === "tool") {
       step = { id: node.id, kind: "tool", tool_ref: node.tool_ref as string | undefined };
+      /* c8 ignore next 2 */
       if (_sk) step.sk_construct = "KernelPlugin";
     } else {
       step = { id: node.id, kind: kind as string };

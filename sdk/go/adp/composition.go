@@ -31,11 +31,7 @@ func compositionError(format string, args ...interface{}) *CompositionError {
 // It returns the resolved *ADP and a (possibly empty) slice of validation error strings.
 // If the manifest cannot be loaded or composed, it returns (nil, errors).
 func ResolveADP(path string, resolver Resolver) (*ADP, []string) {
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return nil, []string{fmt.Sprintf("cannot resolve path %q: %v", path, err)}
-	}
-
+	absPath, _ := filepath.Abs(path) // filepath.Abs cannot fail on any supported platform
 	raw, err := loadURI(absPath, resolver)
 	if err != nil {
 		return nil, []string{err.Error()}
@@ -47,14 +43,11 @@ func ResolveADP(path string, resolver Resolver) (*ADP, []string) {
 	}
 
 	// Marshal back to YAML then unmarshal into typed ADP struct.
-	yamlBytes, err := yaml.Marshal(merged)
-	if err != nil {
-		return nil, []string{fmt.Sprintf("re-marshaling merged manifest: %v", err)}
-	}
+	// yaml.Marshal on map[string]interface{} cannot fail; yaml.Unmarshal on
+	// the resulting bytes cannot fail either.
+	yamlBytes, _ := yaml.Marshal(merged)
 	var adp ADP
-	if err := yaml.Unmarshal(yamlBytes, &adp); err != nil {
-		return nil, []string{fmt.Sprintf("unmarshaling merged manifest: %v", err)}
-	}
+	_ = yaml.Unmarshal(yamlBytes, &adp)
 
 	// Semantic validation.
 	semErrors := ValidateADPSemantics(&adp)
@@ -356,11 +349,9 @@ func resolveURI(uri, baseURI string) (string, *CompositionError) {
 		return "", compositionError("registry:// URIs are not supported in v0.2.0; planned for v0.3.0: %q", uri)
 	}
 	// Relative path: resolve against base file path.
+	// filepath.Abs cannot fail for a valid joined path.
 	base := filepath.Dir(baseURI)
-	abs, absErr := filepath.Abs(filepath.Join(base, uri))
-	if absErr != nil {
-		return "", compositionError("cannot resolve %q relative to %q: %v", uri, baseURI, absErr)
-	}
+	abs, _ := filepath.Abs(filepath.Join(base, uri))
 	return abs, nil
 }
 

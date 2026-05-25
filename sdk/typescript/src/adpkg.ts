@@ -108,6 +108,7 @@ export function verifyPackage(pkgDir: string): { passed: boolean; failures: stri
     verifyBlob(pkgDir, entry.digest, failures);
     const manifest = JSON.parse(fs.readFileSync(blobPath(pkgDir, entry.digest), "utf8"));
     if (manifest.config?.digest) verifyBlob(pkgDir, manifest.config.digest, failures);
+    /* c8 ignore next */
     for (const layer of manifest.layers ?? []) {
       if (layer.digest) verifyBlob(pkgDir, layer.digest, failures);
     }

@@ -436,6 +436,72 @@ def test_read_adp_missing_agent_yaml(tmp_path: Path):
     )
 
 
+def test_inspect_returns_metadata(tmp_path: Path):
+    """Test that inspect() returns structured metadata from an OCI package."""
+    src = build_source(tmp_path)
+    pkg_dir = tmp_path / "oci"
+    pkg = ADPackage.create_from_directory(
+        src, pkg_dir, builder_id="ci", source_repo="https://github.com/test", source_ref="abc123"
+    )
+    info = pkg.inspect()
+    assert info["agent_id"] == "agent.test"
+    assert info["adp_version"] == "0.1.0"
+    assert info["layer_count"] == 1
+    assert "config" in info
+    assert info["config"]["builder.id"] == "ci"
+    assert info["config"]["source.repo"] == "https://github.com/test"
+    assert info["config"]["source.ref"] == "abc123"
+
+
+def test_verify_passes_intact_package(tmp_path: Path):
+    """Test that verify() returns passed=True for an intact package."""
+    src = build_source(tmp_path)
+    pkg_dir = tmp_path / "oci"
+    pkg = ADPackage.create_from_directory(src, pkg_dir)
+    result = pkg.verify()
+    assert result["passed"] is True
+    assert result["failures"] == []
+
+
+def test_verify_detects_missing_blob(tmp_path: Path):
+    """Test that verify() detects a missing blob file."""
+    src = build_source(tmp_path)
+    pkg_dir = tmp_path / "oci"
+    pkg = ADPackage.create_from_directory(src, pkg_dir)
+
+    # Delete one blob to create a missing-blob failure
+    blobs = list((pkg_dir / "blobs" / "sha256").glob("*"))
+    blobs[0].unlink()
+
+    result = pkg.verify()
+    assert result["passed"] is False
+    assert len(result["failures"]) > 0
+    assert any("missing" in f for f in result["failures"])
+
+
+def test_verify_detects_digest_mismatch(tmp_path: Path):
+    """Test that verify() detects a tampered blob (digest mismatch)."""
+    src = build_source(tmp_path)
+    pkg_dir = tmp_path / "oci"
+    pkg = ADPackage.create_from_directory(src, pkg_dir)
+
+    # Get the config blob path from index.json → manifest → config
+    index = json.loads((pkg_dir / "index.json").read_text())
+    manifest_desc = index["manifests"][0]
+    manifest = json.loads(
+        (pkg_dir / "blobs" / "sha256" / manifest_desc["digest"].split(":")[1]).read_bytes()
+    )
+    config_digest_str = manifest["config"]["digest"]
+    config_blob = pkg_dir / "blobs" / "sha256" / config_digest_str.split(":")[1]
+
+    # Corrupt the config blob
+    config_blob.write_bytes(b"tampered content")
+
+    result = pkg.verify()
+    assert result["passed"] is False
+    assert any("mismatch" in f for f in result["failures"])
+
+
 def test_read_adp_agent_yaml_is_directory(tmp_path: Path):
     """Test that read_adp raises FileNotFoundError when adp/agent.yaml is a directory."""
     src = build_source(tmp_path)

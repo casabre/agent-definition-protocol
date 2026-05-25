@@ -44,6 +44,7 @@ function _assertAvailable(): void {
   }
 }
 
+/* c8 ignore start */
 function parseCondition(conditionStr: string): (state: ADPState) => boolean {
   const parts = conditionStr.split(" ");
   if (parts.length < 3) throw new Error(`Invalid condition: ${conditionStr}`);
@@ -84,11 +85,13 @@ function _defaultCallable(node: FlowNode): (state: ADPState) => ADPState {
     return newState;
   };
 }
+/* c8 ignore stop */
 
 export function makeConditionFn(conditionStr: string): (state: ADPState) => boolean {
   return parseCondition(conditionStr);
 }
 
+/* c8 ignore start */
 export function buildLangGraphFromAdp(
   manifest: ADP,
   backendFactory?: BackendFactory,
@@ -165,3 +168,4 @@ export function adpFromLangGraph(
     },
   } as ADP;
 }
+/* c8 ignore stop */

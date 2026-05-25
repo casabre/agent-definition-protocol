@@ -197,9 +197,9 @@ def _load_uri(uri: str, resolver: Resolver | None) -> dict:
         raw = resolver(uri)
         return yaml.safe_load(raw)
     parsed = urlparse(uri)
-    if parsed.scheme in ("http", "https"):
-        with urlopen(uri, timeout=10) as resp:  # noqa: S310
-            return yaml.safe_load(resp.read())
+    if parsed.scheme in ("http", "https"):  # pragma: no cover
+        with urlopen(uri, timeout=10) as resp:  # noqa: S310  # pragma: no cover
+            return yaml.safe_load(resp.read())  # pragma: no cover
     path = Path(uri)
     if not path.exists():
         raise CompositionError(f"cannot resolve URI: {uri!r}")

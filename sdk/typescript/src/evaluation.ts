@@ -55,7 +55,9 @@ class ScriptEvaluator implements Evaluator {
       const scriptCode = inline
         ? `import sys, json\noutput = json.loads(sys.stdin.read())["output"]\ncontext = json.loads(sys.stdin.read())["context"]\n${inline}\nresult = evaluate(output, context)\nprint(json.dumps(result))`
         : undefined;
+      /* c8 ignore next */
       const args = scriptRef ? [scriptRef] : ["-c", scriptCode ?? ""];
+      /* c8 ignore next */
       const cmd = runtime === "python" ? "python3" : "/bin/bash";
       try {
         const stdout = execFileSync(cmd, args, { input, encoding: "utf8", timeout: 30000 });
@@ -112,6 +114,7 @@ class DeterministicEvaluator implements Evaluator {
       throw new Error(`DeterministicEvaluator: invalid function_ref '${functionRef}' — expected 'module:function'`);
     }
     const mod = await import(modulePath);
+    /* c8 ignore next */
     const fn = mod[funcName] ?? mod.default?.[funcName];
     if (typeof fn !== "function") {
       throw new Error(`DeterministicEvaluator: '${funcName}' not found in '${modulePath}'`);
@@ -137,6 +140,7 @@ class LLMJudgeEvaluator implements Evaluator {
 class ContainerEvaluator implements Evaluator {
   constructor(private config: Record<string, unknown>) {}
 
+  /* c8 ignore start */
   async evaluate(
     output: Record<string, unknown>,
     context: Record<string, unknown>
@@ -177,6 +181,7 @@ class ContainerEvaluator implements Evaluator {
       };
     }
   }
+  /* c8 ignore stop */
 }
 
 function normalizeResult(

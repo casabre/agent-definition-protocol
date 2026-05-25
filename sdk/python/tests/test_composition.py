@@ -265,3 +265,200 @@ def test_fixture_files_resolve():
     if child.exists():
         adp = resolve_adp(child)
         assert adp.id == "fixture.comp.child"
+
+
+def test_resolve_adp_raises_on_invalid_merged_result():
+    """resolve_adp raises CompositionError when the merged manifest fails validation."""
+    # Produce a merged YAML with an invalid id (empty string → fails schema validation)
+    invalid_yaml = """\
+adp_version: "0.1.0"
+id: ""
+runtime:
+  execution:
+    - { id: "py", backend: "python", entrypoint: "app:main" }
+flow: {}
+evaluation: {}
+"""
+    resolver = _make_resolver({"/invalid.yaml": invalid_yaml})
+    with pytest.raises(CompositionError, match="invalid"):
+        resolve_adp("/invalid.yaml", resolver=resolver)
+
+
+def test_extends_depth_exceeded():
+    """resolve_adp raises CompositionError when extends chain depth > 10."""
+    # Build a chain: d12 extends d11 extends … extends d1 (12 levels → depth 11 at d1 → triggers)
+    files: dict = {}
+    for i in range(1, 13):
+        if i == 1:
+            content = """\
+adp_version: "0.2.0"
+id: "depth1"
+runtime:
+  execution:
+    - { id: "py", backend: "python", entrypoint: "app:main" }
+flow: {}
+evaluation: {}
+"""
+        else:
+            content = f"""\
+adp_version: "0.2.0"
+id: "depth{i}"
+extends: "/d{i - 1}.yaml"
+"""
+        files[f"/d{i}.yaml"] = content
+    resolver = _make_resolver(files)
+    with pytest.raises(CompositionError, match="depth"):
+        resolve_adp("/d12.yaml", resolver=resolver)
+
+
+def test_deep_merge_null_removes_key():
+    """_deep_merge: a null overlay value removes the key from the result."""
+    from adp_sdk.composition import _deep_merge
+    base = {"a": 1, "b": {"c": 2}}
+    result = _deep_merge(base, {"a": None})
+    assert "a" not in result
+    assert result["b"]["c"] == 2
+
+
+def test_additive_merge_scalar_collision():
+    """_additive_merge: scalar collision → module value wins."""
+    from adp_sdk.composition import _additive_merge
+    base = {"x": 1}
+    module = {"x": 99}
+    result = _additive_merge(base, module)
+    assert result["x"] == 99
+
+
+def test_override_delete_navigates_missing_segment():
+    """override delete with a missing intermediate segment is a no-op (returns unchanged data)."""
+    from adp_sdk.composition import _apply_override
+    data = {"a": {"b": "value"}}
+    result = _apply_override(data, {"path": "/missing/b", "op": "delete"})
+    assert result == data
+
+
+def test_override_delete_removes_from_dict():
+    """override delete on a dict key removes the key."""
+    from adp_sdk.composition import _apply_override
+    data = {"a": {"b": "value", "c": "keep"}}
+    result = _apply_override(data, {"path": "/a/b", "op": "delete"})
+    assert "b" not in result["a"]
+    assert result["a"]["c"] == "keep"
+
+
+def test_override_set_on_list_index():
+    """override set with a list index replaces that list element."""
+    from adp_sdk.composition import _apply_override
+    data = {"items": ["a", "b", "c"]}
+    result = _apply_override(data, {"path": "/items/1", "value": "X", "op": "set"})
+    assert result["items"] == ["a", "X", "c"]
+
+
+def test_override_set_on_non_navigable_raises():
+    """override set into a scalar node raises CompositionError."""
+    from adp_sdk.composition import _apply_override, CompositionError
+    data = {"scalar": "value"}
+    with pytest.raises(CompositionError, match="cannot navigate"):
+        _apply_override(data, {"path": "/scalar/nested", "value": "x", "op": "set"})
+
+
+def test_override_append():
+    """override append adds value to an array."""
+    from adp_sdk.composition import _apply_override
+    data = {"items": ["a", "b"]}
+    result = _apply_override(data, {"path": "/items", "value": "c", "op": "append"})
+    assert result["items"] == ["a", "b", "c"]
+
+
+def test_override_append_on_non_list_raises():
+    """override append on a non-list raises CompositionError."""
+    from adp_sdk.composition import _apply_override, CompositionError
+    data = {"scalar": "value"}
+    with pytest.raises(CompositionError, match="append"):
+        _apply_override(data, {"path": "/scalar", "value": "x", "op": "append"})
+
+
+def test_override_unknown_op_raises():
+    """Unknown override op raises CompositionError."""
+    from adp_sdk.composition import _apply_override, CompositionError
+    data = {"a": 1}
+    with pytest.raises(CompositionError, match="unknown override op"):
+        _apply_override(data, {"path": "/a", "value": 99, "op": "replace"})
+
+
+def test_override_path_no_leading_slash_raises():
+    """override path without leading '/' raises CompositionError."""
+    from adp_sdk.composition import _apply_override, CompositionError
+    data = {"a": 1}
+    with pytest.raises(CompositionError, match="must start with"):
+        _apply_override(data, {"path": "a", "value": 99, "op": "set"})
+
+
+def test_pointer_get_list_index():
+    """_pointer_get on a list with a numeric segment returns the element."""
+    from adp_sdk.composition import _pointer_get
+    node = ["x", "y", "z"]
+    assert _pointer_get(node, "2", "/items/2") == "z"
+
+
+def test_pointer_get_list_invalid_index_raises():
+    """_pointer_get on a list with a non-integer segment raises CompositionError."""
+    from adp_sdk.composition import _pointer_get, CompositionError
+    node = ["x", "y"]
+    with pytest.raises(CompositionError, match="not an integer"):
+        _pointer_get(node, "notanint", "/items/notanint")
+
+
+def test_pointer_get_non_navigable_raises():
+    """_pointer_get on a scalar node raises CompositionError."""
+    from adp_sdk.composition import _pointer_get, CompositionError
+    with pytest.raises(CompositionError, match="cannot navigate"):
+        _pointer_get("scalar_value", "key", "/some/path")
+
+
+def test_to_index_invalid_raises():
+    """_to_index raises CompositionError for a non-integer string."""
+    from adp_sdk.composition import _to_index, CompositionError
+    with pytest.raises(CompositionError, match="not an integer"):
+        _to_index("abc", "/items/abc")
+
+
+def test_load_uri_file_not_found():
+    """_load_uri raises CompositionError for a non-existent local file."""
+    from adp_sdk.composition import _load_uri, CompositionError
+    with pytest.raises(CompositionError, match="cannot resolve URI"):
+        _load_uri("/nonexistent_path_that_does_not_exist_xyz.yaml", None)
+
+
+def test_additive_merge_new_key():
+    """_additive_merge: new key in module is added to result (line 100 branch)."""
+    from adp_sdk.composition import _additive_merge
+    base = {"existing": 1}
+    module = {"new_key": "value", "also_new": [1, 2, 3]}
+    result = _additive_merge(base, module)
+    assert result["existing"] == 1
+    assert result["new_key"] == "value"
+    assert result["also_new"] == [1, 2, 3]
+
+
+def test_pointer_get_dict_missing_segment_raises():
+    """_pointer_get on a dict with a missing key (not allow_missing) raises CompositionError."""
+    from adp_sdk.composition import _pointer_get, CompositionError
+    node = {"a": 1, "b": 2}
+    with pytest.raises(CompositionError, match="not found"):
+        _pointer_get(node, "missing_key", "/some/path", allow_missing=False)
+
+
+def test_resolve_uri_file_scheme_returns_unchanged():
+    """_resolve_uri with file:// scheme returns the URI unchanged."""
+    from adp_sdk.composition import _resolve_uri
+    uri = "file:///some/path/to/file.yaml"
+    result = _resolve_uri(uri, "/base/path.yaml")
+    assert result == uri
+
+
+def test_resolve_uri_registry_scheme_raises():
+    """_resolve_uri with registry:// scheme raises CompositionError."""
+    from adp_sdk.composition import _resolve_uri, CompositionError
+    with pytest.raises(CompositionError, match="registry://"):
+        _resolve_uri("registry://some-agent/1.0", "/base/path.yaml")

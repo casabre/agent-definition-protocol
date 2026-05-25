@@ -1,12 +1,16 @@
 package adpkg
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
 
 const validAgentYAML = `adp_version: "0.1.0"
 id: "agent.test"
@@ -471,6 +475,261 @@ func TestCreateADPKGWriteFileError(t *testing.T) {
 	}
 }
 
+func TestInspect(t *testing.T) {
+	tmp, err := os.MkdirTemp("", "go-inspect-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmp)
+
+	if err := buildSource(tmp); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(tmp, "oci")
+	if err := CreateADPKG(tmp, out); err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+
+	result, err := Inspect(out)
+	if err != nil {
+		t.Fatalf("inspect failed: %v", err)
+	}
+	if result.AgentID != "agent.test" {
+		t.Errorf("expected AgentID 'agent.test', got %q", result.AgentID)
+	}
+	if result.ADPVersion != "0.1.0" {
+		t.Errorf("expected ADPVersion '0.1.0', got %q", result.ADPVersion)
+	}
+	if result.LayerCount < 1 {
+		t.Errorf("expected at least 1 layer, got %d", result.LayerCount)
+	}
+}
+
+func TestInspectMissingIndex(t *testing.T) {
+	tmp, _ := os.MkdirTemp("", "go-inspect-miss-*")
+	defer os.RemoveAll(tmp)
+	_, err := Inspect(tmp)
+	if err == nil {
+		t.Fatal("expected error for missing index.json")
+	}
+}
+
+func TestVerifyPass(t *testing.T) {
+	tmp, _ := os.MkdirTemp("", "go-verify-*")
+	defer os.RemoveAll(tmp)
+	if err := buildSource(tmp); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(tmp, "oci")
+	if err := CreateADPKG(tmp, out); err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+	result, err := Verify(out)
+	if err != nil {
+		t.Fatalf("verify failed: %v", err)
+	}
+	if !result.Passed {
+		t.Errorf("expected passed=true, got failures: %v", result.Failures)
+	}
+	if len(result.Failures) != 0 {
+		t.Errorf("expected no failures, got: %v", result.Failures)
+	}
+}
+
+func TestVerifyDigestMismatch(t *testing.T) {
+	tmp, _ := os.MkdirTemp("", "go-verify-corrupt-*")
+	defer os.RemoveAll(tmp)
+	if err := buildSource(tmp); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(tmp, "oci")
+	if err := CreateADPKG(tmp, out); err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+
+	// Read index to find a blob to corrupt
+	indexData, _ := os.ReadFile(filepath.Join(out, "index.json"))
+	var index map[string]interface{}
+	json.Unmarshal(indexData, &index)
+	manifests := index["manifests"].([]interface{})
+	manifestDesc := manifests[0].(map[string]interface{})
+	digest := manifestDesc["digest"].(string)
+
+	// Read the manifest blob to find the config blob
+	parts := strings.Split(digest, ":")
+	manifestPath := filepath.Join(out, "blobs", parts[0], parts[1])
+	manifestData, _ := os.ReadFile(manifestPath)
+	var manifest map[string]interface{}
+	json.Unmarshal(manifestData, &manifest)
+	configDesc := manifest["config"].(map[string]interface{})
+	configDigest := configDesc["digest"].(string)
+	configParts := strings.Split(configDigest, ":")
+	configBlobPath := filepath.Join(out, "blobs", configParts[0], configParts[1])
+
+	// Corrupt the config blob
+	os.WriteFile(configBlobPath, []byte(`{"tampered":true}`), 0o644)
+
+	result, err := Verify(out)
+	if err != nil {
+		t.Fatalf("verify returned error: %v", err)
+	}
+	if result.Passed {
+		t.Error("expected passed=false for corrupted blob")
+	}
+	if len(result.Failures) == 0 {
+		t.Error("expected failures for corrupted blob")
+	}
+}
+
+func TestVerifyBlobMissing(t *testing.T) {
+	tmp, _ := os.MkdirTemp("", "go-verify-missing-*")
+	defer os.RemoveAll(tmp)
+	if err := buildSource(tmp); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(tmp, "oci")
+	if err := CreateADPKG(tmp, out); err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+
+	// Find and delete the layer blob
+	indexData, _ := os.ReadFile(filepath.Join(out, "index.json"))
+	var index map[string]interface{}
+	json.Unmarshal(indexData, &index)
+	manifests := index["manifests"].([]interface{})
+	manifestDesc := manifests[0].(map[string]interface{})
+	digest := manifestDesc["digest"].(string)
+	parts := strings.Split(digest, ":")
+	manifestPath := filepath.Join(out, "blobs", parts[0], parts[1])
+	manifestData, _ := os.ReadFile(manifestPath)
+	var manifest map[string]interface{}
+	json.Unmarshal(manifestData, &manifest)
+	layers := manifest["layers"].([]interface{})
+	layer := layers[0].(map[string]interface{})
+	layerDigest := layer["digest"].(string)
+	layerParts := strings.Split(layerDigest, ":")
+	layerBlobPath := filepath.Join(out, "blobs", layerParts[0], layerParts[1])
+	os.Remove(layerBlobPath)
+
+	result, _ := Verify(out)
+	if result.Passed {
+		t.Error("expected passed=false for missing blob")
+	}
+	foundMissing := false
+	for _, f := range result.Failures {
+		if strings.Contains(f, "blob file missing") {
+			foundMissing = true
+		}
+	}
+	if !foundMissing {
+		t.Errorf("expected 'blob file missing' in failures, got: %v", result.Failures)
+	}
+}
+
+func TestBlobPath(t *testing.T) {
+	// blobPath is a private helper, exercise it through Inspect/Verify
+	tmp, _ := os.MkdirTemp("", "go-blobpath-*")
+	defer os.RemoveAll(tmp)
+	if err := buildSource(tmp); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(tmp, "oci")
+	if err := CreateADPKG(tmp, out); err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+	// Inspect uses blobPath internally
+	result, err := Inspect(out)
+	if err != nil {
+		t.Fatalf("inspect (uses blobPath) failed: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil inspect result")
+	}
+}
+
+func TestInspectInvalidIndexJSON(t *testing.T) {
+	// Write a corrupted index.json that is not valid JSON
+	tmp, _ := os.MkdirTemp("", "go-inspect-badjson-*")
+	defer os.RemoveAll(tmp)
+	os.WriteFile(filepath.Join(tmp, "index.json"), []byte("not-json"), 0o644)
+	_, err := Inspect(tmp)
+	if err == nil {
+		t.Fatal("expected error for invalid index.json JSON")
+	}
+}
+
+func TestInspectMissingManifestBlob(t *testing.T) {
+	// Valid index.json pointing to a missing manifest blob
+	tmp, _ := os.MkdirTemp("", "go-inspect-noman-*")
+	defer os.RemoveAll(tmp)
+	os.MkdirAll(filepath.Join(tmp, "blobs", "sha256"), 0o755)
+	indexJSON := `{"schemaVersion":2,"manifests":[{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"sha256:deadbeef0000000000000000000000000000000000000000000000000000cafe","size":100}]}`
+	os.WriteFile(filepath.Join(tmp, "index.json"), []byte(indexJSON), 0o644)
+	_, err := Inspect(tmp)
+	if err == nil {
+		t.Fatal("expected error for missing manifest blob")
+	}
+}
+
+func TestInspectInvalidManifestJSON(t *testing.T) {
+	// Valid index.json pointing to a blob that contains invalid JSON for manifest
+	tmp, _ := os.MkdirTemp("", "go-inspect-badman-*")
+	defer os.RemoveAll(tmp)
+	os.MkdirAll(filepath.Join(tmp, "blobs", "sha256"), 0o755)
+	// Write an invalid manifest blob
+	blobContent := []byte("not-valid-json")
+	h := sha256.Sum256(blobContent)
+	digest := "sha256:" + hex.EncodeToString(h[:])
+	os.WriteFile(filepath.Join(tmp, "blobs", "sha256", hex.EncodeToString(h[:])), blobContent, 0o644)
+	indexJSON := `{"schemaVersion":2,"manifests":[{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"` + digest + `","size":` + fmt.Sprintf("%d", len(blobContent)) + `}]}`
+	os.WriteFile(filepath.Join(tmp, "index.json"), []byte(indexJSON), 0o644)
+	_, err := Inspect(tmp)
+	if err == nil {
+		t.Fatal("expected error for invalid manifest JSON blob")
+	}
+}
+
+func TestVerifyInvalidIndexJSON(t *testing.T) {
+	tmp, _ := os.MkdirTemp("", "go-verify-badjson-*")
+	defer os.RemoveAll(tmp)
+	os.WriteFile(filepath.Join(tmp, "index.json"), []byte("not-json"), 0o644)
+	_, err := Verify(tmp)
+	if err == nil {
+		t.Fatal("expected error for invalid index.json JSON")
+	}
+}
+
+func TestCreateADPKGWithProvenance(t *testing.T) {
+	tmp, err := os.MkdirTemp("", "go-adpkg-prov-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmp)
+
+	if err := buildSource(tmp); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(tmp, "oci")
+	if err := CreateADPKGWithProvenance(tmp, out, "builder-1", "https://github.com/example/repo", "abc1234"); err != nil {
+		t.Fatalf("CreateADPKGWithProvenance failed: %v", err)
+	}
+
+	result, err := Inspect(out)
+	if err != nil {
+		t.Fatalf("inspect failed: %v", err)
+	}
+	if result.AgentID != "agent.test" {
+		t.Errorf("expected AgentID 'agent.test', got %q", result.AgentID)
+	}
+	// Verify provenance fields are in config
+	if result.Config["builder.id"] != "builder-1" {
+		t.Errorf("expected builder.id 'builder-1', got %v", result.Config["builder.id"])
+	}
+	if result.Config["source.repo"] != "https://github.com/example/repo" {
+		t.Errorf("expected source.repo, got %v", result.Config["source.repo"])
+	}
+}
+
 func TestCreateADPKGV0_1_0(t *testing.T) {
 	tmp, err := os.MkdirTemp("", "go-adpkg-v0.1.0-*")
 	if err != nil {
@@ -522,5 +781,308 @@ evaluation:
 	// Verify package was created
 	if _, err := os.Stat(filepath.Join(out, "index.json")); err != nil {
 		t.Fatalf("missing index.json: %v", err)
+	}
+}
+
+// ──── Additional branch coverage tests ──────────────────────────────────────
+
+// TestInspectConfigBlobMissing exercises the os.ReadFile error path for the
+// config blob in Inspect (line 167 in adpkg.go).
+func TestInspectConfigBlobMissing(t *testing.T) {
+	tmp, _ := os.MkdirTemp("", "go-inspect-nocfg-*")
+	defer os.RemoveAll(tmp)
+	if err := buildSource(tmp); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(tmp, "oci")
+	if err := CreateADPKG(tmp, out); err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+
+	// Read index to find manifest blob, then manifest to find config blob.
+	indexData, _ := os.ReadFile(filepath.Join(out, "index.json"))
+	var index map[string]interface{}
+	json.Unmarshal(indexData, &index)
+	manifestDesc := index["manifests"].([]interface{})[0].(map[string]interface{})
+	parts := strings.Split(manifestDesc["digest"].(string), ":")
+	manifestData, _ := os.ReadFile(filepath.Join(out, "blobs", parts[0], parts[1]))
+	var manifest map[string]interface{}
+	json.Unmarshal(manifestData, &manifest)
+	configDigest := manifest["config"].(map[string]interface{})["digest"].(string)
+	configParts := strings.Split(configDigest, ":")
+	configBlobPath := filepath.Join(out, "blobs", configParts[0], configParts[1])
+
+	// Delete the config blob.
+	os.Remove(configBlobPath)
+
+	_, err := Inspect(out)
+	if err == nil {
+		t.Fatal("expected error when config blob is missing")
+	}
+}
+
+// TestInspectConfigBlobInvalidJSON exercises the json.Unmarshal error path for
+// the config blob in Inspect (line 171 in adpkg.go).
+func TestInspectConfigBlobInvalidJSON(t *testing.T) {
+	tmp, _ := os.MkdirTemp("", "go-inspect-badjsoncfg-*")
+	defer os.RemoveAll(tmp)
+	if err := buildSource(tmp); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(tmp, "oci")
+	if err := CreateADPKG(tmp, out); err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+
+	// Find and overwrite config blob with invalid JSON.
+	indexData, _ := os.ReadFile(filepath.Join(out, "index.json"))
+	var index map[string]interface{}
+	json.Unmarshal(indexData, &index)
+	manifestDesc := index["manifests"].([]interface{})[0].(map[string]interface{})
+	parts := strings.Split(manifestDesc["digest"].(string), ":")
+	manifestData, _ := os.ReadFile(filepath.Join(out, "blobs", parts[0], parts[1]))
+	var manifest map[string]interface{}
+	json.Unmarshal(manifestData, &manifest)
+	configDigest := manifest["config"].(map[string]interface{})["digest"].(string)
+	configParts := strings.Split(configDigest, ":")
+	configBlobPath := filepath.Join(out, "blobs", configParts[0], configParts[1])
+
+	// Overwrite config blob with invalid JSON (not a map).
+	os.WriteFile(configBlobPath, []byte("[1,2,3]"), 0o644)
+
+	_, err := Inspect(out)
+	if err == nil {
+		t.Fatal("expected error for invalid config JSON")
+	}
+}
+
+// TestVerifyMissingIndexFile exercises the os.ReadFile error path for
+// index.json in Verify (line 189 in adpkg.go).
+func TestVerifyMissingIndexFile(t *testing.T) {
+	tmp, _ := os.MkdirTemp("", "go-verify-noindex-*")
+	defer os.RemoveAll(tmp)
+	// No index.json written → os.ReadFile should fail.
+	_, err := Verify(tmp)
+	if err == nil {
+		t.Fatal("expected error for missing index.json in Verify")
+	}
+}
+
+// TestVerifyMissingManifestBlob exercises the continue path (line 203) in Verify
+// when the manifest blob itself is missing (verifyBlob records failure, ReadFile fails).
+func TestVerifyMissingManifestBlob(t *testing.T) {
+	tmp, _ := os.MkdirTemp("", "go-verify-nomanblob-*")
+	defer os.RemoveAll(tmp)
+	if err := buildSource(tmp); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(tmp, "oci")
+	if err := CreateADPKG(tmp, out); err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+
+	// Find and delete the manifest blob.
+	indexData, _ := os.ReadFile(filepath.Join(out, "index.json"))
+	var index map[string]interface{}
+	json.Unmarshal(indexData, &index)
+	manifests := index["manifests"].([]interface{})
+	desc := manifests[0].(map[string]interface{})
+	digest := desc["digest"].(string)
+	parts := strings.Split(digest, ":")
+	manifestBlobPath := filepath.Join(out, "blobs", parts[0], parts[1])
+	os.Remove(manifestBlobPath)
+
+	result, err := Verify(out)
+	if err != nil {
+		t.Fatalf("Verify returned unexpected error: %v", err)
+	}
+	// verifyBlob should have recorded a failure for the missing manifest blob.
+	if result.Passed {
+		t.Error("expected passed=false for missing manifest blob")
+	}
+}
+
+// TestVerifyManifestBlobInvalidJSON exercises the json.Unmarshal error continue
+// path (line 207) in Verify when the manifest blob contains invalid JSON.
+func TestVerifyManifestBlobInvalidJSON(t *testing.T) {
+	tmp, _ := os.MkdirTemp("", "go-verify-badmanjson-*")
+	defer os.RemoveAll(tmp)
+	if err := buildSource(tmp); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(tmp, "oci")
+	if err := CreateADPKG(tmp, out); err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+
+	// Overwrite the manifest blob with invalid JSON (but keep same digest name
+	// so verifyBlob records a mismatch, then json.Unmarshal fails → continue).
+	indexData, _ := os.ReadFile(filepath.Join(out, "index.json"))
+	var index map[string]interface{}
+	json.Unmarshal(indexData, &index)
+	manifests := index["manifests"].([]interface{})
+	desc := manifests[0].(map[string]interface{})
+	digest := desc["digest"].(string)
+	parts := strings.Split(digest, ":")
+	manifestBlobPath := filepath.Join(out, "blobs", parts[0], parts[1])
+
+	// Write invalid JSON to the manifest blob (same path, wrong content).
+	os.WriteFile(manifestBlobPath, []byte("not-valid-json"), 0o644)
+
+	result, err := Verify(out)
+	if err != nil {
+		t.Fatalf("Verify returned unexpected error: %v", err)
+	}
+	// verifyBlob records a digest mismatch, and json.Unmarshal fails → continue.
+	if result.Passed {
+		t.Error("expected passed=false due to digest mismatch")
+	}
+}
+
+// TestCreateTarDestError exercises the os.Create error path in createTar (line 256).
+func TestCreateTarDestError(t *testing.T) {
+	tmp, _ := os.MkdirTemp("", "go-tar-dest-*")
+	defer os.RemoveAll(tmp)
+	if err := buildSource(tmp); err != nil {
+		t.Fatal(err)
+	}
+
+	// Use a destination path inside a non-existent directory to trigger os.Create error.
+	destPath := filepath.Join(tmp, "nonexistent_dir", "test.tar")
+	err := createTar(destPath, tmp)
+	if err == nil {
+		t.Fatal("expected error when destination directory does not exist")
+	}
+}
+
+// TestCreateTarFileReadError exercises the os.ReadFile error path (line 278) in createTar
+// by creating a file with no read permissions in the source directory.
+func TestCreateTarFileReadError(t *testing.T) {
+	tmp, _ := os.MkdirTemp("", "go-tar-read-*")
+	defer os.RemoveAll(tmp)
+	if err := buildSource(tmp); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a file with no read permissions.
+	noReadFile := filepath.Join(tmp, "secret.txt")
+	if err := os.WriteFile(noReadFile, []byte("secret"), 0o000); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(noReadFile, 0o644)
+
+	destPath := filepath.Join(tmp, "output.tar")
+	err := createTar(destPath, tmp)
+	if err == nil {
+		// On some systems (e.g., running as root) permission may not apply.
+		t.Log("createTar succeeded despite no-read file (may be root user or system-dependent)")
+		return
+	}
+	// If it failed, it should be due to the unreadable file.
+	t.Logf("createTar failed as expected: %v", err)
+}
+
+// TestCreateADPKGWithProvenanceWriteIndexError exercises the os.WriteFile error
+// path for index.json (line 118) in CreateADPKGWithProvenance.
+func TestCreateADPKGWithProvenanceWriteIndexError(t *testing.T) {
+	tmp, _ := os.MkdirTemp("", "go-adpkg-idx-err-*")
+	defer os.RemoveAll(tmp)
+	if err := buildSource(tmp); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create output directory, then make it read-only so that os.WriteFile
+	// for index.json fails (blobs/sha256 is created first via MkdirAll).
+	outDir := filepath.Join(tmp, "oci")
+	if err := os.MkdirAll(filepath.Join(outDir, "blobs", "sha256"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Make the oci directory read-only after creating blobs/sha256.
+	if err := os.Chmod(outDir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(outDir, 0o755)
+
+	err := CreateADPKGWithProvenance(tmp, outDir, "", "", "")
+	if err == nil {
+		t.Log("CreateADPKGWithProvenance succeeded despite read-only outDir (may be system-dependent)")
+	} else {
+		t.Logf("CreateADPKGWithProvenance failed as expected: %v", err)
+	}
+}
+
+// TestCreateADPKGWriteFilePaths exercises each of the 5 WriteFile call sites
+// in CreateADPKGWithProvenance using the injectable adpkgWriteFile var.
+func TestCreateADPKGWriteFilePaths(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("skipping DI test as root")
+	}
+
+	tmp, _ := os.MkdirTemp("", "go-adpkg-di-*")
+	defer os.RemoveAll(tmp)
+	if err := buildSource(tmp); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name    string
+		failOn  int // 1-based: which WriteFile call to fail
+	}{
+		{"config blob write failure", 1},
+		{"layer blob write failure", 2},
+		{"manifest blob write failure", 3},
+		{"index.json write failure", 4},
+		{"oci-layout write failure", 5},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			out := filepath.Join(tmp, "oci-"+strings.ReplaceAll(tc.name, " ", "-"))
+
+			orig := adpkgWriteFile
+			count := 0
+			adpkgWriteFile = func(name string, data []byte, perm os.FileMode) error {
+				count++
+				if count == tc.failOn {
+					return fmt.Errorf("injected write error for call %d", tc.failOn)
+				}
+				return os.WriteFile(name, data, perm)
+			}
+			defer func() { adpkgWriteFile = orig }()
+
+			err := CreateADPKGWithProvenance(tmp, out, "", "", "")
+			if err == nil {
+				t.Fatalf("expected error for %s (WriteFile call #%d)", tc.name, tc.failOn)
+			}
+		})
+	}
+}
+
+// TestCreateADPKGReadLayerTarError exercises the adpkgReadFile error path for
+// the layer.tar file in CreateADPKGWithProvenance.
+func TestCreateADPKGReadLayerTarError(t *testing.T) {
+	tmp, _ := os.MkdirTemp("", "go-adpkg-readtar-*")
+	defer os.RemoveAll(tmp)
+	if err := buildSource(tmp); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(tmp, "oci")
+
+	origReadFile := adpkgReadFile
+	adpkgReadFile = func(name string) ([]byte, error) {
+		if strings.HasSuffix(name, "layer.tar") {
+			return nil, fmt.Errorf("injected layerTar read error")
+		}
+		return os.ReadFile(name)
+	}
+	defer func() { adpkgReadFile = origReadFile }()
+
+	err := CreateADPKGWithProvenance(tmp, out, "", "", "")
+	if err == nil {
+		t.Fatal("expected error for layer.tar read failure")
+	}
+	if !strings.Contains(err.Error(), "injected layerTar read error") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

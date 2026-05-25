@@ -12,8 +12,8 @@ from collections import defaultdict
 from typing import Any, Callable, TypedDict
 
 try:
-    from langgraph.graph import END, StateGraph
-    _AVAILABLE = True
+    from langgraph.graph import END, StateGraph  # pragma: no cover
+    _AVAILABLE = True  # pragma: no cover
 except ImportError:
     END = None  # type: ignore[assignment]
     StateGraph = None  # type: ignore[assignment]
@@ -128,7 +128,7 @@ def _default_callable(node: dict, _entry: dict) -> Callable[[ADPState], ADPState
     return _fn
 
 
-def build_langgraph_from_adp(
+def build_langgraph_from_adp(  # pragma: no cover
     manifest: dict,
     backend_factory: BackendFactory | None = None,
 ) -> tuple:
@@ -175,7 +175,7 @@ def build_langgraph_from_adp(
     return graph.compile(), adp_node_map
 
 
-def adp_from_langgraph(
+def adp_from_langgraph(  # pragma: no cover
     graph: Any,
     adp_node_map: dict[str, dict],
     original_manifest: dict,

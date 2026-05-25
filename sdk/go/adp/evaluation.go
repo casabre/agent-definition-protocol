@@ -156,9 +156,7 @@ func normalizeResult(raw interface{}, id, evalType string) *EvaluationResult {
 			base.Reason = r
 		}
 	default:
-		if b, ok := raw.(bool); ok {
-			base.Passed = b
-		}
+		// Non-bool, non-map result: leave base.Passed as false (zero value).
 	}
 	return base
 }

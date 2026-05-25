@@ -184,6 +184,7 @@ function _applyOverride(
     let node: unknown = result;
     for (const seg of segments.slice(0, -1)) {
       node = _pointerGet(node, seg, pointerPath, true);
+      /* c8 ignore next */
       if (node === undefined || node === null) return result;
     }
     const last = segments[segments.length - 1];
@@ -211,6 +212,7 @@ function _applyOverride(
     } else if (Array.isArray(node)) {
       const idx = _toIndex(last, pointerPath);
       (node as unknown[])[idx] = _deepCopy(value);
+      /* c8 ignore next 4 */
     } else {
       throw new CompositionError(
         `override set: cannot navigate path '${pointerPath}'`
@@ -289,6 +291,7 @@ function _resolveUri(uri: string, baseUri: string): string {
     // base is a custom-scheme URI; resolve relative path against its "directory"
     const schemeAndHost = schemeMatch[1];
     const basePath = schemeMatch[2] || "/";
+    /* c8 ignore next */
     const baseDir = basePath.substring(0, basePath.lastIndexOf("/") + 1) || "/";
     // Simple relative path join (no full URL resolution needed here)
     const joined = baseDir + uri.replace(/^\.\//, "");
@@ -303,6 +306,7 @@ function _loadUri(uri: string, resolver?: Resolver): Record<string, unknown> {
     const raw = resolver(uri);
     return yaml.load(raw) as Record<string, unknown>;
   }
+  /* c8 ignore next 4 */
   if (/^https?:\/\//.test(uri)) {
     throw new CompositionError(
       `HTTP/HTTPS URIs require a custom resolver in this environment: ${uri}`

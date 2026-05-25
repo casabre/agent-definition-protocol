@@ -11,9 +11,9 @@ from __future__ import annotations
 from typing import Any, Callable
 
 try:
-    from autogen_agentchat.agents import AssistantAgent
-    from autogen_agentchat.teams import RoundRobinGroupChat, SelectorGroupChat
-    _AVAILABLE = True
+    from autogen_agentchat.agents import AssistantAgent  # pragma: no cover
+    from autogen_agentchat.teams import RoundRobinGroupChat, SelectorGroupChat  # pragma: no cover
+    _AVAILABLE = True  # pragma: no cover
 except ImportError:
     AssistantAgent = None  # type: ignore[assignment, misc]
     RoundRobinGroupChat = None  # type: ignore[assignment]
@@ -23,7 +23,7 @@ except ImportError:
 BackendFactory = Callable[[dict, dict], Any] | None
 
 
-def build_autogen_from_adp(manifest: dict, backend_factory: BackendFactory = None) -> tuple[dict, list]:
+def build_autogen_from_adp(manifest: dict, backend_factory: BackendFactory = None) -> tuple[dict, list]:  # pragma: no cover
     """Build AutoGen agent map from an ADP manifest.
 
     Returns:

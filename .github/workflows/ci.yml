@@ -41,7 +41,7 @@ jobs:
       - name: Python tests
         run: |
           cd sdk/python
-          pytest tests --cov=adp_sdk --cov-report=xml:coverage.xml
+          pytest tests --cov=adp_sdk --cov-report=xml:coverage.xml --cov-fail-under=100
       - name: Upload Python coverage
         if: always()
         uses: actions/upload-artifact@v4
@@ -90,7 +90,7 @@ jobs:
       - name: Cargo coverage
         run: |
           cd sdk/rust
-          cargo llvm-cov --all-features --locked --lcov --output-path coverage.lcov
+          cargo llvm-cov --all-features --locked --lcov --output-path coverage.lcov --fail-under-lines 100
       - name: Upload Rust coverage
         if: always()
         uses: actions/upload-artifact@v4
@@ -113,6 +113,19 @@ jobs:
         run: |
           cd sdk/go
           go test ./... -coverprofile=coverage.out -covermode=atomic
+      - name: Enforce Go coverage threshold (100%)
+        env:
+          GOCACHE: ${{ runner.temp }}/gocache
+        run: |
+          cd sdk/go
+          COVERAGE=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | tr -d '%')
+          echo "Total Go coverage: ${COVERAGE}%"
+          THRESHOLD=100
+          if awk "BEGIN {exit !($COVERAGE < $THRESHOLD)}"; then
+            echo "Coverage ${COVERAGE}% is below required threshold of ${THRESHOLD}%"
+            exit 1
+          fi
+          echo "Coverage check passed: ${COVERAGE}% >= ${THRESHOLD}%"
       - name: Upload Go coverage
         if: always()
         uses: actions/upload-artifact@v4

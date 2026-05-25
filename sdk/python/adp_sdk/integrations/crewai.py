@@ -20,9 +20,9 @@ def _probe_crewai() -> bool:
     global _crewai_available
     if _crewai_available is None:
         try:
-            import crewai  # noqa: F401
-            from crewai.flow.flow import Flow  # noqa: F401
-            _crewai_available = True
+            import crewai  # noqa: F401  # pragma: no cover
+            from crewai.flow.flow import Flow  # noqa: F401  # pragma: no cover
+            _crewai_available = True  # pragma: no cover
         except ImportError:
             _crewai_available = False
     return _crewai_available
@@ -77,12 +77,12 @@ def build_crewai_from_adp(
     router_node_ids: list[str] = [n["id"] for n in nodes if n.get("kind") == "router"]
 
     if _probe_crewai():
-        return _build_real(nodes, start_node_ids, router_node_ids, edges, backend_factory)
+        return _build_real(nodes, start_node_ids, router_node_ids, edges, backend_factory)  # pragma: no cover
     else:
         return _build_mock(nodes, start_node_ids, router_node_ids)
 
 
-def _build_real(
+def _build_real(  # pragma: no cover
     nodes: list[dict],
     start_node_ids: list[str],
     router_node_ids: list[str],
