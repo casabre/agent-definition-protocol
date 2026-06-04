@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://casabre.github.io/agent-definition-protocol/schemas/adp.schema.json",
-  "title": "Agent Definition Protocol v0.2.0",
+  "title": "Agent Definition Protocol v0.3.0",
   "type": "object",
   "required": ["adp_version", "id", "runtime", "flow", "evaluation"],
   "properties": {
@@ -104,6 +104,66 @@
             "authenticated_extension": { "$ref": "#/definitions/a2a_authenticated_extension" }
           },
           "additionalProperties": true
+        },
+        "agentspec": {
+          "type": "object",
+          "description": "Oracle AgentSpec interoperability mapping. Declares this manifest's relationship to an AgentSpec configuration and provides identity bridges for round-trip tooling. All fields are optional.",
+          "properties": {
+            "ref": {
+              "type": "string",
+              "description": "URI or relative file path to the AgentSpec YAML/JSON configuration file."
+            },
+            "version": {
+              "type": "string",
+              "pattern": "^\\d{2}\\.\\d+\\.\\d+$",
+              "description": "AgentSpec calendar version (YY.minor.patch) using a two-digit calendar-year prefix (e.g., '26.2.0' for 2026). Single-digit years are not valid under this scheme."
+            },
+            "component_type": {
+              "type": "string",
+              "enum": ["Agent", "Flow"],
+              "description": "The AgentSpec root component type this manifest maps to."
+            },
+            "component_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUID of the root AgentSpec component, preserved for round-trip identity."
+            },
+            "runtime_adapters": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "AgentSpec-compatible runtime adapters that can execute this manifest (e.g., 'wayflow', 'langgraph', 'autogen', 'crewai')."
+            },
+            "node_map": {
+              "type": "object",
+              "additionalProperties": { "type": "string", "format": "uuid" },
+              "description": "Maps ADP flow node IDs to AgentSpec component UUIDs. Keys MUST match node IDs in flow.graph.nodes."
+            },
+            "llm_map": {
+              "type": "array",
+              "description": "Maps ADP runtime execution backends to AgentSpec LLM config components.",
+              "items": {
+                "type": "object",
+                "required": ["backend_id", "agentspec_id"],
+                "properties": {
+                  "backend_id": {
+                    "type": "string",
+                    "description": "ID of the ADP runtime.execution entry. MUST match an id in runtime.execution."
+                  },
+                  "agentspec_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "UUID of the AgentSpec LLM config component."
+                  },
+                  "agentspec_type": {
+                    "type": "string",
+                    "description": "AgentSpec LLM config type (e.g., 'OpenAiConfig', 'OciGenAiConfig', 'VllmConfig', 'OllamaConfig')."
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
@@ -130,6 +190,50 @@
                   "scopes": {"type": "array", "items": {"type": "string"}}
                 },
                 "additionalProperties": false
+              },
+              "load_strategy": {
+                "type": "string",
+                "enum": ["eager", "lazy", "on_demand"],
+                "default": "eager",
+                "description": "eager: full schema loaded at invocation start; lazy: schema loaded on first actual use; on_demand: only description shown upfront, full schema injected when LLM emits tool-request signal"
+              },
+              "policy": {
+                "type": "object",
+                "description": "Tool invocation policy.",
+                "properties": {
+                  "retry": {
+                    "type": "object",
+                    "properties": {
+                      "max_attempts": {"type": "integer", "minimum": 1, "default": 3},
+                      "backoff": {"type": "string", "enum": ["fixed", "linear", "exponential"], "default": "exponential"},
+                      "backoff_base_ms": {"type": "integer", "minimum": 0, "default": 500},
+                      "max_delay_ms": {"type": "integer", "minimum": 0, "default": 10000},
+                      "retryable_status_codes": {"type": "array", "items": {"type": "integer"}}
+                    },
+                    "additionalProperties": false
+                  },
+                  "timeout_ms": {"type": "integer", "minimum": 1},
+                  "rate_limit": {
+                    "type": "object",
+                    "properties": {
+                      "requests_per_minute": {"type": "integer", "minimum": 1},
+                      "burst": {"type": "integer", "minimum": 0},
+                      "on_limit_exceeded": {"type": "string", "enum": ["queue", "fail", "warn"], "default": "queue"}
+                    },
+                    "additionalProperties": false
+                  },
+                  "cache": {
+                    "type": "object",
+                    "properties": {
+                      "enabled": {"type": "boolean", "default": false},
+                      "ttl_seconds": {"type": "integer", "minimum": 0},
+                      "key_fields": {"type": "array", "items": {"type": "string"}},
+                      "scope": {"type": "string", "enum": ["agent", "session", "user"]}
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "additionalProperties": false
               }
             },
             "additionalProperties": false
@@ -151,6 +255,50 @@
                   "scheme": {"type": "string", "enum": ["bearer", "api_key", "oauth2", "mtls", "none"]},
                   "env_var": {"type": "string"},
                   "scopes": {"type": "array", "items": {"type": "string"}}
+                },
+                "additionalProperties": false
+              },
+              "load_strategy": {
+                "type": "string",
+                "enum": ["eager", "lazy", "on_demand"],
+                "default": "eager",
+                "description": "eager: full schema loaded at invocation start; lazy: schema loaded on first actual use; on_demand: only description shown upfront, full schema injected when LLM emits tool-request signal"
+              },
+              "policy": {
+                "type": "object",
+                "description": "Tool invocation policy.",
+                "properties": {
+                  "retry": {
+                    "type": "object",
+                    "properties": {
+                      "max_attempts": {"type": "integer", "minimum": 1, "default": 3},
+                      "backoff": {"type": "string", "enum": ["fixed", "linear", "exponential"], "default": "exponential"},
+                      "backoff_base_ms": {"type": "integer", "minimum": 0, "default": 500},
+                      "max_delay_ms": {"type": "integer", "minimum": 0, "default": 10000},
+                      "retryable_status_codes": {"type": "array", "items": {"type": "integer"}}
+                    },
+                    "additionalProperties": false
+                  },
+                  "timeout_ms": {"type": "integer", "minimum": 1},
+                  "rate_limit": {
+                    "type": "object",
+                    "properties": {
+                      "requests_per_minute": {"type": "integer", "minimum": 1},
+                      "burst": {"type": "integer", "minimum": 0},
+                      "on_limit_exceeded": {"type": "string", "enum": ["queue", "fail", "warn"], "default": "queue"}
+                    },
+                    "additionalProperties": false
+                  },
+                  "cache": {
+                    "type": "object",
+                    "properties": {
+                      "enabled": {"type": "boolean", "default": false},
+                      "ttl_seconds": {"type": "integer", "minimum": 0},
+                      "key_fields": {"type": "array", "items": {"type": "string"}},
+                      "scope": {"type": "string", "enum": ["agent", "session", "user"]}
+                    },
+                    "additionalProperties": false
+                  }
                 },
                 "additionalProperties": false
               }
@@ -177,27 +325,86 @@
                   "scopes": {"type": "array", "items": {"type": "string"}}
                 },
                 "additionalProperties": false
+              },
+              "load_strategy": {
+                "type": "string",
+                "enum": ["eager", "lazy", "on_demand"],
+                "default": "eager",
+                "description": "eager: full schema loaded at invocation start; lazy: schema loaded on first actual use; on_demand: only description shown upfront, full schema injected when LLM emits tool-request signal"
+              },
+              "policy": {
+                "type": "object",
+                "description": "Tool invocation policy.",
+                "properties": {
+                  "retry": {
+                    "type": "object",
+                    "properties": {
+                      "max_attempts": {"type": "integer", "minimum": 1, "default": 3},
+                      "backoff": {"type": "string", "enum": ["fixed", "linear", "exponential"], "default": "exponential"},
+                      "backoff_base_ms": {"type": "integer", "minimum": 0, "default": 500},
+                      "max_delay_ms": {"type": "integer", "minimum": 0, "default": 10000},
+                      "retryable_status_codes": {"type": "array", "items": {"type": "integer"}}
+                    },
+                    "additionalProperties": false
+                  },
+                  "timeout_ms": {"type": "integer", "minimum": 1},
+                  "rate_limit": {
+                    "type": "object",
+                    "properties": {
+                      "requests_per_minute": {"type": "integer", "minimum": 1},
+                      "burst": {"type": "integer", "minimum": 0},
+                      "on_limit_exceeded": {"type": "string", "enum": ["queue", "fail", "warn"], "default": "queue"}
+                    },
+                    "additionalProperties": false
+                  },
+                  "cache": {
+                    "type": "object",
+                    "properties": {
+                      "enabled": {"type": "boolean", "default": false},
+                      "ttl_seconds": {"type": "integer", "minimum": 0},
+                      "key_fields": {"type": "array", "items": {"type": "string"}},
+                      "scope": {"type": "string", "enum": ["agent", "session", "user"]}
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "additionalProperties": false
               }
             },
             "additionalProperties": false
           }
+        },
+        "sandbox": {
+          "$ref": "sandbox.schema.json"
         }
       },
       "additionalProperties": false
     },
     "memory": {
-      "type": "object",
-      "properties": {
-        "provider": {"type": "string"},
-        "endpoint": {"type": "string"},
-        "index": {"type": "string"},
-        "namespace": {"type": "string"}
-      },
-      "additionalProperties": false
+      "oneOf": [
+        {
+          "title": "Legacy v0.1.x memory format (backward compatibility)",
+          "type": "object",
+          "properties": {
+            "provider": {"type": "string"},
+            "endpoint": {"type": "string"},
+            "index": {"type": "string"},
+            "namespace": {"type": "string"}
+          },
+          "additionalProperties": false
+        },
+        {
+          "title": "Structured v0.3.0 memory format",
+          "$ref": "memory.schema.json"
+        }
+      ]
     },
+    "workspace": {"$ref": "workspace.schema.json"},
+    "artifacts": {"$ref": "artifacts.schema.json"},
+    "observability": {"$ref": "observability.schema.json"},
     "guardrails": {
       "type": "object",
-      "description": "Guardrail declarations for input/output filtering. Formalized in v0.2.0.",
+      "description": "Guardrail declarations for input/output filtering (v0.2.0) plus interrupts, cost, and agent trust (v0.3.0).",
       "properties": {
         "input": {
           "type": "array",
@@ -231,7 +438,93 @@
             "additionalProperties": false
           }
         },
-        "on_violation": {"type": "string", "enum": ["block", "log"]}
+        "on_violation": {"type": "string", "enum": ["block", "log"]},
+        "interrupts": {
+          "type": "array",
+          "description": "Human-in-the-loop interrupts.",
+          "items": {
+            "type": "object",
+            "required": ["id", "trigger", "mode"],
+            "properties": {
+              "id": {"type": "string", "minLength": 1},
+              "trigger": {
+                "type": "string",
+                "enum": ["tool_call", "cost_threshold", "loop_max_exceeded", "custom"]
+              },
+              "tool_refs": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Which tool IDs trigger this (for tool_call trigger)"
+              },
+              "mode": {
+                "type": "string",
+                "enum": ["pause_and_notify", "block", "log"],
+                "description": "pause_and_notify is always blocking by definition; execution_mode only applies to block or log modes"
+              },
+              "execution_mode": {
+                "type": "string",
+                "enum": ["blocking", "parallel"],
+                "description": "Only valid when mode is 'block' or 'log'. blocking: check completes BEFORE agent invocation; parallel: check runs concurrently with agent"
+              },
+              "notification": {
+                "type": "object",
+                "properties": {
+                  "channel": {"type": "string", "enum": ["webhook"]},
+                  "endpoint_env_var": {"type": "string"},
+                  "timeout_seconds": {"type": "integer", "minimum": 1},
+                  "on_timeout": {"type": "string", "enum": ["fail", "approve", "deny"]}
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "cost": {
+          "type": "object",
+          "description": "Cost guardrails - active enforcement.",
+          "properties": {
+            "threshold_usd": {"type": "number", "minimum": 0},
+            "on_threshold_exceeded": {
+              "type": "string",
+              "enum": ["block", "warn", "interrupt", "downgrade"]
+            },
+            "interrupt_ref": {
+              "type": "string",
+              "description": "Required when on_threshold_exceeded='interrupt'; references guardrails.interrupts[].id"
+            },
+            "downgrade_model_ref": {
+              "type": "string",
+              "description": "Required when on_threshold_exceeded='downgrade'; references runtime.models[].id"
+            },
+            "track_by": {
+              "type": "string",
+              "enum": ["invocation", "session", "user", "day"]
+            },
+            "model_refs": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Absent = all models"
+            }
+          },
+          "additionalProperties": false
+        },
+        "agent_trust": {
+          "type": "object",
+          "description": "Agent trust level with normative enforcement table.",
+          "properties": {
+            "level": {
+              "type": "string",
+              "enum": ["sandboxed", "supervised", "autonomous"]
+            },
+            "side_effect_tool_refs": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Tools classified as write/side-effect"
+            }
+          },
+          "additionalProperties": false
+        }
       },
       "additionalProperties": false
     },

@@ -1,0 +1,30 @@
+adp_version: "0.3.0"
+id: "test-memory-static-injection-path"
+runtime:
+  execution:
+    - id: "primary"
+      backend: "python"
+      entrypoint: "main.py"
+  models:
+    - id: "primary"
+      provider: "openai"
+      model: "gpt-4o"
+flow:
+  id: "main"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+      - id: "output"
+        kind: "output"
+    edges: []
+    start_nodes: ["input"]
+    end_nodes: ["output"]
+evaluation: {}
+memory:
+  context_assembly:
+    static_injection:
+      - id: "prompt1"
+        source: "file"
+        path: "../etc/passwd"  # Check 24: path traversal
+        position: "prepend"

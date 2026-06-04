@@ -1,0 +1,26 @@
+adp_version: "0.3.0"
+id: "test-memory-working-summary-missing"
+runtime:
+  execution:
+    - id: "primary"
+      backend: "python"
+      entrypoint: "main.py"
+  models:
+    - id: "primary"
+      provider: "openai"
+      model: "gpt-4o"
+flow:
+  id: "main"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+      - id: "output"
+        kind: "output"
+    edges: []
+    start_nodes: ["input"]
+    end_nodes: ["output"]
+evaluation: {}
+memory:
+  working:
+    strategy: "summary"  # Check 21b: missing summary_model_ref

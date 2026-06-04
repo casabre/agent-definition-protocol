@@ -1,0 +1,26 @@
+adp_version: "0.3.0"
+id: agent.acme.bad-node-ref
+runtime:
+  execution:
+    - id: primary
+      backend: python
+      entrypoint: acme_agents.main:app
+flow:
+  id: acme.flow
+  graph:
+    nodes:
+      - id: input
+        kind: input
+      - id: output
+        kind: output
+    edges:
+      - from: input
+        to: output
+    start_nodes: [input]
+    end_nodes: [output]
+evaluation: {}
+interop:
+  agentspec:
+    # node_map references "nonexistent_node" which is not in flow.graph.nodes — invalid
+    node_map:
+      nonexistent_node: "fc98ab56-0d30-4bdd-a84d-cab76d75e575"

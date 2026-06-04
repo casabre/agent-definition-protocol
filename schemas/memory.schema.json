@@ -1,0 +1,205 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://casabre.github.io/agent-definition-protocol/schemas/memory.schema.json",
+  "title": "Memory & Context v0.3.0",
+  "type": "object",
+  "description": "ADP Memory & Context layer - fifth harness layer joining Execution, Observation, Safety, Testing.",
+  "oneOf": [
+    {
+      "title": "Legacy v0.1.x memory format (backward compatibility)",
+      "type": "object",
+      "properties": {
+        "provider": {"type": "string"},
+        "endpoint": {"type": "string"},
+        "index": {"type": "string"},
+        "namespace": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    {
+      "title": "Structured v0.3.0 memory format",
+      "type": "object",
+      "properties": {
+        "stores": {
+          "type": "array",
+          "description": "External-backed memory stores (episodic or semantic).",
+          "items": {
+            "type": "object",
+            "required": ["id", "type", "provider"],
+            "properties": {
+              "id": {"type": "string", "minLength": 1},
+              "type": {
+                "type": "string",
+                "enum": ["episodic", "semantic"],
+                "description": "working is NOT a valid type - use memory.working sub-block for in-process working memory"
+              },
+              "provider": {"type": "string"},
+              "endpoint": {"type": "string"},
+              "index": {"type": "string"},
+              "scope": {
+                "type": "string",
+                "enum": ["agent", "session", "user"],
+                "default": "agent"
+              },
+              "ttl_seconds": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Time-to-live in seconds. Absent = no expiry."
+              },
+              "pii": {
+                "type": "boolean",
+                "default": false
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "working": {
+          "type": "object",
+          "description": "In-process working memory (no external provider).",
+          "properties": {
+            "strategy": {
+              "type": "string",
+              "enum": ["sliding_window", "full", "summary"],
+              "default": "sliding_window"
+            },
+            "window_size": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "max_tokens": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "summary_model_ref": {
+              "type": "string",
+              "description": "REQUIRED when strategy=summary; references runtime.models[].id"
+            },
+            "compaction_threshold_tokens": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Trigger summarization when working memory exceeds this; absent = no threshold trigger"
+            }
+          },
+          "additionalProperties": false
+        },
+        "context_assembly": {
+          "type": "object",
+          "description": "Declarative recipe for context injection before matched node invocations.",
+          "properties": {
+            "apply_to_node_kinds": {
+              "type": "array",
+              "items": {"type": "string"},
+              "default": ["llm"],
+              "description": "Valid values: llm, retriever, evaluator. Invalid: tool, router, subflow, loop."
+            },
+            "order": {
+              "type": "array",
+              "description": "Ordered list of context sources.",
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "required": ["source"],
+                    "properties": {
+                      "source": {"type": "string", "enum": ["working"]}
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "required": ["source", "store_ref"],
+                    "properties": {
+                      "source": {"type": "string", "enum": ["store"]},
+                      "store_ref": {"type": "string"},
+                      "top_k": {"type": "integer", "minimum": 1},
+                      "relevance_threshold": {"type": "number", "minimum": 0, "maximum": 1}
+                    },
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            },
+            "max_total_tokens": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "static_injection": {
+              "type": "array",
+              "description": "Static knowledge injection (AGENTS.md pattern).",
+              "items": {
+                "type": "object",
+                "required": ["id", "source", "position"],
+                "properties": {
+                  "id": {"type": "string", "minLength": 1},
+                  "source": {"type": "string", "enum": ["file", "inline"]},
+                  "path": {
+                    "type": "string",
+                    "description": "Relative path without .. traversal; resolved relative to workspace.root"
+                  },
+                  "content": {"type": "string"},
+                  "position": {"type": "string", "enum": ["prepend", "append"]},
+                  "max_tokens": {"type": "integer", "minimum": 1}
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "operations": {
+          "type": "array",
+          "description": "Declarative memory write plan (runner implements; no code in manifest).",
+          "items": {
+            "type": "object",
+            "required": ["on_event", "op"],
+            "properties": {
+              "on_event": {
+                "type": "string",
+                "enum": ["on_invoke_end"]
+              },
+              "op": {
+                "type": "string",
+                "enum": ["write", "clear", "summarize"]
+              },
+              "store_ref": {"type": "string"},
+              "fields": {
+                "type": "array",
+                "items": {"type": "string"}
+              },
+              "when": {"type": "string"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "retention": {
+          "type": "object",
+          "description": "Privacy and lifecycle policy (GDPR / EU AI Act readable at manifest level).",
+          "properties": {
+            "pii_policy": {
+              "type": "string",
+              "enum": ["redact", "encrypt", "block", "log"],
+              "default": "redact"
+            },
+            "user_consent_required": {
+              "type": "boolean",
+              "default": false
+            },
+            "data_residency": {
+              "type": "array",
+              "items": {"type": "string"}
+            },
+            "auto_clear_on": {
+              "type": "string",
+              "enum": ["session_end", "agent_stop", "never"],
+              "default": "never"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  ],
+  "additionalProperties": false
+}

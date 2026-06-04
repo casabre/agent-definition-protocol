@@ -1119,3 +1119,136 @@ The following schema updates are required for ADP v0.2.0:
 - [Flow Specification](flow.md)
 - [Evaluation Specification](evaluation.md)
 - [Conformance Program](conformance.md)
+
+---
+
+## ADP v0.3.0 ESP Amendments
+
+ADP v0.3.0 extends ESP with new sections for loop nodes, tool policy, session state, and artifact writes.
+
+---
+
+### Section D9: Loop Node Semantics
+
+Loop nodes (`kind: "loop"`) execute their `body_nodes` repeatedly according to the `termination` configuration.
+
+**Body nodes as membership**: `body_nodes[]` is a **membership declaration**, not an execution sequence. The execution order is determined by the flow graph edge topology connecting those nodes. The runner resolves which edges are "in scope" for the loop body by restricting to edges where both `from` and `to` are in `body_nodes[]`.
+
+**Termination conditions**:
+- `condition`: Evaluated after each complete iteration of `body_nodes`. If true, loop exits normally.
+- `max_iterations`: Hard upper bound. Runner MUST enforce and exit when reached.
+- `max_tokens`: Cumulative token usage across all body node executions. Runner MUST track and exit when exceeded.
+
+**Termination priority**: When multiple termination conditions could be met, the loop exits on the **first** one encountered (logical OR). The `terminated_by` field in state records which condition triggered:
+- `"condition"`: Loop condition evaluated to true
+- `"max_iterations"`: `max_iterations` bound reached
+- `"max_tokens"`: `max_tokens` bound reached
+
+**`on_max_exceeded` behavior**:
+- `"fail"`: Loop exits with permanent failure (default when absent)
+- `"use_last"`: Loop exits successfully, using the last iteration's output
+- `"escalate"`: Loop triggers HITL interrupt; MUST have matching `guardrails.interrupts[].trigger: "loop_max_exceeded"` or treat as permanent failure
+
+**Ralph Loop / `restart_context`**:
+When `restart_context: true` is set:
+- If `memory.working.compaction_threshold_tokens` is exceeded mid-iteration, the runner finishes the current iteration normally, then starts the next iteration with a fresh in-process context window
+- If no `compaction_threshold_tokens` is set, each iteration starts with a fresh context window (unconditional restart)
+- `memory.stores[]` (episodic/semantic) and `state.session` persist across restarts
+- The original invocation `inputs` are re-injected at the start of each fresh context
+- `restart_context` and `max_tokens` are independent: context restarts on threshold, but loop still terminates when total token usage hits `max_tokens`
+
+**Loop policy fallback**:
+For manifests without explicit `loop` nodes but with graph cycles, the `flow.loop_policy` provides fallback behavior:
+- `default_max_iterations`: Applied to implicit cycles
+- `on_max_exceeded`: Applied to implicit cycles (default: `"fail"`)
+- `total_run_max_iterations`: Absolute cap across ALL loops (explicit and implicit) in a single run
+
+---
+
+### Tool Policy Application Order (Amendment)
+
+Tool invocation semantics (original ESP) are wrapped with policy application:
+
+1. **Rate limit check**: If `policy.rate_limit` is configured and limit is exceeded, apply `on_limit_exceeded` action:
+   - `"queue"`: Wait and retry when limit resets
+   - `"fail"`: Fail with transient error (may be retried)
+   - `"warn"`: Log warning and proceed
+
+2. **Cache check**: If `policy.cache.enabled` and cache hit exists:
+   - Write to `tool_responses` with `"cached": true`
+   - Include `cache_hit_at` timestamp
+   - Skip actual tool invocation
+
+3. **Timeout enforcement**: Apply `policy.timeout_ms`:
+   - Abort invocation if exceeded
+   - Treat as transient failure
+
+4. **Retry on failure**: If invocation fails and `policy.retry` is configured:
+   - Retry with exponential/linear/fixed backoff
+   - Respect `max_attempts`, `max_delay_ms`
+   - Retry only on `retryable_status_codes` (or all on empty)
+
+5. **Cache write on success**: If `policy.cache.enabled`, cache the successful result
+
+---
+
+### Session State Key (Amendment)
+
+ESP state model is extended with a `session` key for runners implementing session-scoped stores:
+
+```json
+{
+  "state": {
+    "inputs": { ... },
+    "context": { ... },
+    "memory": { ... },
+    "tool_responses": { ... },
+    "session": {
+      "id": "sess-abc123",
+      "started_at": "2026-05-25T08:00:00Z",
+      "turn_count": 3
+    }
+  }
+}
+```
+
+The `session` key is:
+- Additive to existing ESP state (no breaking changes)
+- Scoped to runners implementing `memory.stores[].scope: "session"` or `workspace.git.branch_per_session: true`
+- Used for session-scoped artifact storage and memory isolation
+
+---
+
+### Artifact Write Phase (Amendment)
+
+Artifact writes happen in the ESP `on_invoke_end` phase, after the node's output is written to `state.context`:
+
+1. Node executes and writes output to `state.context[node_id]`
+2. `on_invoke_end` hooks fire
+3. **Artifact write**: For nodes with `params.artifact`, runner:
+   - Resolves `content_field` to the appropriate state location
+   - If content is absent, writes error to `state.context[node_id].artifact_error` and skips
+   - Writes artifact to store with auto-incremented version
+   - Updates `state.artifacts[store_id][artifact_name]` with version, timestamp, size
+
+**`content_field` resolution**:
+- `llm` nodes: `state.context[node_id].output`
+- `tool` nodes: `state.tool_responses[node_id].response`
+- `output` nodes: Value of `output_ref` context key
+
+---
+
+### Sandbox Credential Isolation Rule (Normative)
+
+Secrets declared in `runtime.env_secrets[]` or resolved from `auth.env_var` references MUST NOT be automatically injected into sandbox `env` blocks. The sandbox execution context is isolated from harness credentials to prevent prompt injection attacks from exfiltrating API keys.
+
+If a sandbox legitimately needs a credential, the manifest MUST explicitly declare it in `tools.sandbox[].env` using a separate non-secret env var.
+
+**Sandbox ↔ Workspace Permission Precedence** (Normative):
+- `sandbox.policy.allow_filesystem_writes: false` is the coarse gate — no writes regardless of `workspace.permissions.write[]`
+- If `allow_filesystem_writes: true`, the runner MUST additionally enforce `workspace.permissions.write[]` glob patterns as the fine-grained path filter
+- Both layers must permit a path for a write to succeed
+
+---
+
+*Expert skills applied: `role-senior-software-engineer`, `role-senior-agentic-ai-developer`*

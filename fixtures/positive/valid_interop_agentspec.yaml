@@ -1,0 +1,49 @@
+adp_version: "0.3.0"
+id: agent.acme.writing-assistant
+name: Writing Assistant
+runtime:
+  execution:
+    - id: primary
+      backend: python
+      entrypoint: acme_agents.writing:app
+flow:
+  id: acme.writing.flow
+  graph:
+    nodes:
+      - id: input
+        kind: input
+      - id: assistant
+        kind: llm
+        model_ref: primary
+      - id: output
+        kind: output
+        output_ref: assistant
+    edges:
+      - from: input
+        to: assistant
+      - from: assistant
+        to: output
+    start_nodes: [input]
+    end_nodes: [output]
+evaluation:
+  suites:
+    - id: basic
+      metrics:
+        - id: m1
+          type: deterministic
+          function: noop
+          scoring: boolean
+          threshold: true
+interop:
+  agentspec:
+    ref: "./writing-assistant.agentspec.yaml"
+    version: "26.2.0"
+    component_type: "Agent"
+    component_id: "bdd2369b-82e6-488f-be2c-44f05b244cab"
+    runtime_adapters: ["wayflow", "langgraph"]
+    node_map:
+      assistant: "fc98ab56-0d30-4bdd-a84d-cab76d75e575"
+    llm_map:
+      - backend_id: primary
+        agentspec_id: "3a5bf0c0-9f28-47d8-99b4-be7da6a531c8"
+        agentspec_type: "OpenAiConfig"

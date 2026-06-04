@@ -1,0 +1,32 @@
+adp_version: "0.3.0"
+id: "test-guardrails-cost-interrupt-ref"
+runtime:
+  execution:
+    - id: "primary"
+      backend: "python"
+      entrypoint: "main.py"
+  models:
+    - id: "primary"
+      provider: "openai"
+      model: "gpt-4o"
+flow:
+  id: "main"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+      - id: "output"
+        kind: "output"
+    edges: []
+    start_nodes: ["input"]
+    end_nodes: ["output"]
+evaluation: {}
+guardrails:
+  interrupts:
+    - id: "cost-interrupt"
+      trigger: "cost_threshold"
+      mode: "pause_and_notify"
+  cost:
+    threshold_usd: 100.0
+    on_threshold_exceeded: "interrupt"
+    interrupt_ref: "nonexistent-interrupt"  # Check 23: references unknown interrupt

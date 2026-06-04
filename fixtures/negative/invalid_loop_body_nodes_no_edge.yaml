@@ -1,0 +1,36 @@
+adp_version: "0.3.0"
+id: "test-loop-no-edge"
+runtime:
+  execution:
+    - id: "primary"
+      backend: "python"
+      entrypoint: "main.py"
+  models:
+    - id: "primary"
+      provider: "openai"
+      model: "gpt-4o"
+flow:
+  id: "main"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+      - id: "step1"
+        kind: "llm"
+        model_ref: "primary"
+      - id: "step2"
+        kind: "llm"
+        model_ref: "primary"
+      - id: "loop1"
+        kind: "loop"
+        body_nodes: ["step1", "step2"]  # No edge connects step1 and step2 - Check 15b
+      - id: "output"
+        kind: "output"
+    edges:
+      - from: "input"
+        to: "loop1"
+      - from: "loop1"
+        to: "output"
+    start_nodes: ["input"]
+    end_nodes: ["output"]
+evaluation: {}

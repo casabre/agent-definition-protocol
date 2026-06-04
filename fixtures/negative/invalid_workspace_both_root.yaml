@@ -1,0 +1,26 @@
+adp_version: "0.3.0"
+id: "test-workspace-both-root"
+runtime:
+  execution:
+    - id: "primary"
+      backend: "python"
+      entrypoint: "main.py"
+  models:
+    - id: "primary"
+      provider: "openai"
+      model: "gpt-4o"
+flow:
+  id: "main"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+      - id: "output"
+        kind: "output"
+    edges: []
+    start_nodes: ["input"]
+    end_nodes: ["output"]
+evaluation: {}
+workspace:
+  root: "/tmp/workspace"  # Check 25b: both root and root_env_var
+  root_env_var: "WORKSPACE_ROOT"

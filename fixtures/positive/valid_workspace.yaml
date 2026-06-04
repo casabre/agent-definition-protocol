@@ -1,0 +1,56 @@
+adp_version: 0.3.0
+id: valid-workspace-example
+runtime:
+  execution:
+  - id: primary
+    backend: python
+    entrypoint: main.py
+  models:
+  - id: primary
+    provider: openai
+    model: gpt-4o
+flow:
+  id: main
+  graph:
+    nodes:
+    - id: input
+      kind: input
+    - id: output
+      kind: output
+    edges: []
+    start_nodes:
+    - input
+    end_nodes:
+    - output
+workspace:
+  root: /tmp/agent-workspace
+  git:
+    enabled: true
+    auto_commit: true
+    branch_per_session: false
+  permissions:
+    read:
+    - '**'
+    write:
+    - outputs/*
+    - tmp/*
+    exec:
+    - scripts/*
+  mounts:
+  - id: s3-data
+    provider: s3
+    bucket: my-data-bucket
+    prefix: agent-data
+    target: data
+    read_only: true
+    credentials_env_var: S3_CREDENTIALS
+  - id: gcs-models
+    provider: gcs
+    bucket: my-model-bucket
+    target: models
+    read_only: true
+  cleanup:
+    true: session_end
+    exclude:
+    - .git/*
+    - outputs/*

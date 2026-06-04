@@ -1,0 +1,33 @@
+adp_version: "0.3.0"
+id: "test-duplicate-store-id"
+runtime:
+  execution:
+    - id: "primary"
+      backend: "python"
+      entrypoint: "main.py"
+  models:
+    - id: "primary"
+      provider: "openai"
+      model: "gpt-4"
+flow:
+  id: "main"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+      - id: "output"
+        kind: "output"
+    edges: []
+    start_nodes: ["input"]
+    end_nodes: ["output"]
+evaluation: {}
+memory:
+  stores:
+    - id: "knowledge"
+      type: "semantic"
+      provider: "pinecone"
+      endpoint: "https://pinecone.io"
+    - id: "knowledge"
+      type: "episodic"
+      provider: "redis"
+      endpoint: "redis://localhost"

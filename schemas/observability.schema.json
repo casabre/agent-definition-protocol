@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://casabre.github.io/agent-definition-protocol/schemas/observability.schema.json",
+  "title": "Observability v0.3.0",
+  "type": "object",
+  "description": "Declarative tracing configuration - manifests declare which tracing backend to use and what events to emit.",
+  "properties": {
+    "tracing": {
+      "type": "object",
+      "description": "Tracing configuration.",
+      "properties": {
+        "backend": {
+          "type": "string",
+          "enum": ["otlp", "langfuse", "langsmith", "arize", "phoenix", "stdout", "none"]
+        },
+        "endpoint_env_var": {
+          "type": "string",
+          "description": "Env var holding the collector endpoint"
+        },
+        "api_key_env_var": {
+          "type": "string",
+          "description": "Env var holding auth key; absent = unauthenticated"
+        },
+        "trace_events": {
+          "type": "array",
+          "description": "Which events to emit as spans. Absent = runner default (typically all).",
+          "items": {
+            "type": "string",
+            "enum": ["model_request", "tool_call", "flow_node", "loop_iteration", "interrupt", "cost_check", "artifact_write"]
+          }
+        },
+        "sampling_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 1.0,
+          "description": "0.0–1.0; 1.0 = trace every run; 0.1 = sample 10%"
+        },
+        "service_name": {
+          "type": "string",
+          "description": "OTel service.name attribute; defaults to manifest id"
+        }
+      },
+      "additionalProperties": false
+    },
+    "cost_reporting": {
+      "type": "object",
+      "description": "Passive cost reporting (distinct from guardrails.cost which is active enforcement). Both can coexist.",
+      "properties": {
+        "enabled": {"type": "boolean", "default": false},
+        "track_by": {
+          "type": "string",
+          "enum": ["invocation", "session", "user", "day"],
+          "description": "Matches guardrails.cost.track_by dimensions"
+        },
+        "emit_metric": {
+          "type": "string",
+          "default": "gen_ai.cost.usd",
+          "description": "OTel metric name for cost"
+        },
+        "model_refs": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Absent = all models"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

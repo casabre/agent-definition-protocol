@@ -1,0 +1,74 @@
+adp_version: 0.3.0
+id: valid-guardrails-example
+runtime:
+  execution:
+  - id: primary
+    backend: python
+    entrypoint: main.py
+  models:
+  - id: primary
+    provider: openai
+    model: gpt-4o
+  - id: fallback
+    provider: openai
+    model: gpt-4
+flow:
+  id: main
+  graph:
+    nodes:
+    - id: input
+      kind: input
+    - id: output
+      kind: output
+    edges: []
+    start_nodes:
+    - input
+    end_nodes:
+    - output
+tools:
+  http_apis:
+  - id: expensive-tool
+    description: An expensive tool
+    base_url: https://api.example.com
+guardrails:
+  input:
+  - id: input-guardrail
+    provider: openai-mod
+    policy_ref: default-input
+    mode: block
+    categories:
+    - hate
+    - violence
+    threshold: high
+  output:
+  - id: output-guardrail
+    provider: openai-mod
+    policy_ref: default-output
+    mode: redact
+  on_violation: block
+  interrupts:
+  - id: cost-interrupt
+    trigger: cost_threshold
+    mode: pause_and_notify
+    notification:
+      channel: webhook
+      endpoint_env_var: HITL_WEBHOOK
+      timeout_seconds: 30
+      on_timeout: deny
+  - id: tool-interrupt
+    trigger: tool_call
+    tool_refs:
+    - expensive-tool
+    mode: block
+    execution_mode: blocking
+  cost:
+    threshold_usd: 100.0
+    on_threshold_exceeded: interrupt
+    interrupt_ref: cost-interrupt
+    track_by: session
+    model_refs:
+    - primary
+  agent_trust:
+    level: supervised
+    side_effect_tool_refs:
+    - expensive-tool

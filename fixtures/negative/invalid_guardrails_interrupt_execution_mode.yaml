@@ -1,0 +1,35 @@
+adp_version: "0.3.0"
+id: "test-guardrails-interrupt-execution-mode"
+runtime:
+  execution:
+    - id: "primary"
+      backend: "python"
+      entrypoint: "main.py"
+  models:
+    - id: "primary"
+      provider: "openai"
+      model: "gpt-4o"
+flow:
+  id: "main"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+      - id: "output"
+        kind: "output"
+    edges: []
+    start_nodes: ["input"]
+    end_nodes: ["output"]
+evaluation: {}
+tools:
+  http_apis:
+    - id: "real-tool"
+      description: "A real tool"
+      base_url: "https://api.example.com"
+guardrails:
+  interrupts:
+    - id: "interrupt1"
+      trigger: "tool_call"
+      tool_refs: ["real-tool"]
+      mode: "pause_and_notify"
+      execution_mode: "blocking"  # Check 22b: execution_mode set with pause_and_notify

@@ -1,0 +1,34 @@
+adp_version: "0.3.0"
+id: "test-workspace-mounts"
+runtime:
+  execution:
+    - id: "primary"
+      backend: "python"
+      entrypoint: "main.py"
+  models:
+    - id: "primary"
+      provider: "openai"
+      model: "gpt-4o"
+flow:
+  id: "main"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+      - id: "output"
+        kind: "output"
+    edges: []
+    start_nodes: ["input"]
+    end_nodes: ["output"]
+evaluation: {}
+workspace:
+  root: "/tmp/workspace"
+  mounts:
+    - id: "mount1"
+      provider: "s3"
+      bucket: "my-bucket"
+      target: "../data"  # Check 31: path traversal in target
+    - id: "mount1"  # Check 31: duplicate mount id
+      provider: "gcs"
+      bucket: "my-bucket2"
+      target: "/data"

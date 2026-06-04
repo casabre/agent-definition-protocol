@@ -1,0 +1,28 @@
+adp_version: "0.3.0"
+id: "test-guardrails-cost-downgrade"
+runtime:
+  execution:
+    - id: "primary"
+      backend: "python"
+      entrypoint: "main.py"
+  models:
+    - id: "primary"
+      provider: "openai"
+      model: "gpt-4o"
+flow:
+  id: "main"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+      - id: "output"
+        kind: "output"
+    edges: []
+    start_nodes: ["input"]
+    end_nodes: ["output"]
+evaluation: {}
+guardrails:
+  cost:
+    threshold_usd: 100.0
+    on_threshold_exceeded: "downgrade"
+    # Check 30: downgrade_model_ref missing

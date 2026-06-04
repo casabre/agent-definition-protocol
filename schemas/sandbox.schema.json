@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://casabre.github.io/agent-definition-protocol/schemas/sandbox.schema.json",
+  "title": "Execution Sandbox v0.3.0",
+  "type": "object",
+  "description": "Code execution sandbox - declarative binding to a code-execution environment. Distinct from runtime.execution (how the agent itself runs).",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["id", "runtime", "policy"],
+    "properties": {
+      "id": {"type": "string", "minLength": 1},
+      "runtime": {
+        "type": "string",
+        "enum": ["python", "node", "bash", "browser", "custom"],
+        "description": "Execution runtime environment"
+      },
+      "version": {"type": "string"},
+      "image": {
+        "type": ["string", "null"],
+        "description": "OCI image ref; null = runner's default image"
+      },
+      "provider": {
+        "type": "string",
+        "enum": ["docker", "e2b", "modal", "daytona", "vercel", "cloudflare", "runloop", "blaxel", "custom"],
+        "description": "Provider abstraction: same manifest runs on any provider; absent = runner selects based on runtime.adapter_hints or default"
+      },
+      "mounts": {
+        "type": "array",
+        "description": "Filesystem mounts for the sandbox.",
+        "items": {
+          "type": "object",
+          "required": ["source", "target"],
+          "properties": {
+            "source": {
+              "type": "string",
+              "description": "'workspace' = mount workspace.root; or a literal path"
+            },
+            "target": {"type": "string"},
+            "read_only": {"type": "boolean", "default": false}
+          },
+          "additionalProperties": false
+        }
+      },
+      "env": {
+        "type": "object",
+        "additionalProperties": {"type": "string"},
+        "description": "Environment variables for sandbox execution"
+      },
+      "snapshot": {
+        "type": "object",
+        "description": "Snapshotting: save sandbox env state; restore on failure/timeout.",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "If true, runner snapshots env after each invocation"
+          },
+          "restore_on": {
+            "type": "string",
+            "enum": ["failure", "always", "never"],
+            "default": "never"
+          }
+        },
+        "additionalProperties": false
+      },
+      "policy": {
+        "type": "object",
+        "required": ["timeout_ms"],
+        "properties": {
+          "timeout_ms": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "MUST be present - no unbounded sandbox execution"
+          },
+          "max_output_bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Output cap in bytes; excess is truncated"
+          },
+          "network": {
+            "type": "string",
+            "enum": ["none", "host", "bridge"],
+            "default": "none"
+          },
+          "allow_filesystem_writes": {
+            "type": "boolean",
+            "default": false,
+            "description": "Coarse gate - no writes regardless of workspace.permissions.write[]"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "additionalProperties": false
+  }
+}

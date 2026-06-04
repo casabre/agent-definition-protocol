@@ -1,0 +1,55 @@
+adp_version: 0.3.0
+id: valid-loops-example
+runtime:
+  execution:
+  - id: primary
+    backend: python
+    entrypoint: main.py
+  models:
+  - id: primary
+    provider: openai
+    model: gpt-4o
+flow:
+  id: main
+  loop_policy:
+    default_max_iterations: 10
+    on_max_exceeded: fail
+    total_run_max_iterations: 50
+  graph:
+    nodes:
+    - id: input
+      kind: input
+    - id: step1
+      kind: llm
+      model_ref: primary
+    - id: step2
+      kind: tool
+      tool_ref: processor
+    - id: loop1
+      kind: loop
+      body_nodes:
+      - step1
+      - step2
+      termination:
+        max_iterations: 5
+        on_max_exceeded: use_last
+    - id: output
+      kind: output
+    edges:
+    - from: input
+      to: loop1
+    - from: step1
+      to: step2
+    - from: step2
+      to: step1
+    - from: loop1
+      to: output
+    start_nodes:
+    - input
+    end_nodes:
+    - output
+tools:
+  http_apis:
+  - id: processor
+    description: Process data
+    base_url: https://api.example.com

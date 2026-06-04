@@ -1,0 +1,30 @@
+adp_version: "0.3.0"
+id: "test-observability-cost-reporting"
+runtime:
+  execution:
+    - id: "primary"
+      backend: "python"
+      entrypoint: "main.py"
+  models:
+    - id: "primary"
+      provider: "openai"
+      model: "gpt-4o"
+    - id: "fallback"
+      provider: "openai"
+      model: "gpt-4"
+flow:
+  id: "main"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+      - id: "output"
+        kind: "output"
+    edges: []
+    start_nodes: ["input"]
+    end_nodes: ["output"]
+evaluation: {}
+observability:
+  cost_reporting:
+    enabled: true
+    model_refs: ["nonexistent-model"]  # Check 35b: references unknown model

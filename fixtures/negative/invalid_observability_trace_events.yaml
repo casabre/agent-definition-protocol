@@ -1,0 +1,29 @@
+adp_version: "0.3.0"
+id: "test-observability-trace-events"
+runtime:
+  execution:
+    - id: "primary"
+      backend: "python"
+      entrypoint: "main.py"
+  models:
+    - id: "primary"
+      provider: "openai"
+      model: "gpt-4o"
+flow:
+  id: "main"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+      - id: "output"
+        kind: "output"
+    edges: []
+    start_nodes: ["input"]
+    end_nodes: ["output"]
+evaluation: {}
+observability:
+  tracing:
+    backend: "otlp"
+    trace_events:
+      - "model_request"
+      - "invalid_event"  # Check 35: invalid trace event

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://casabre.github.io/agent-definition-protocol/schemas/flow.schema.json",
-  "title": "AFG Flow v0.1",
+  "title": "AFG Flow v0.3.0",
   "type": "object",
   "required": ["id", "graph"],
   "properties": {
@@ -29,6 +29,28 @@
           "type": "array",
           "items": {"type": "string"},
           "minItems": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "loop_policy": {
+      "type": "object",
+      "description": "Flow-level fallback for v0.1.x manifests with implicit cycles.",
+      "properties": {
+        "default_max_iterations": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Applies to graph cycles without an explicit loop node"
+        },
+        "on_max_exceeded": {
+          "type": "string",
+          "enum": ["fail", "use_last", "escalate"],
+          "default": "fail"
+        },
+        "total_run_max_iterations": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Absolute cap across ALL loops in a single run"
         }
       },
       "additionalProperties": false
@@ -64,7 +86,7 @@
         "id": {"type": "string", "minLength": 1},
         "kind": {
           "type": "string",
-          "enum": ["input", "output", "llm", "tool", "router", "retriever", "evaluator", "subflow"]
+          "enum": ["input", "output", "llm", "tool", "router", "retriever", "evaluator", "subflow", "loop"]
         },
         "label": {"type": "string"},
         "model_ref": {"type": "string"},
@@ -86,6 +108,43 @@
           "type": "string",
           "enum": ["sequence", "conditional", "parallel"],
           "description": "Routing strategy for router nodes"
+        },
+        "body_nodes": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "For loop nodes: node IDs forming the loop body. body_nodes is a membership declaration, not an execution sequence. Execution order is determined by flow graph edge topology."
+        },
+        "termination": {
+          "type": "object",
+          "description": "For loop nodes: termination conditions.",
+          "properties": {
+            "condition": {
+              "type": "string",
+              "description": "Exit when true; same expression grammar as edge conditions"
+            },
+            "max_iterations": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Hard upper bound; runner MUST enforce"
+            },
+            "max_tokens": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Exit when cumulative token usage across body nodes exceeds this"
+            },
+            "on_max_exceeded": {
+              "type": "string",
+              "enum": ["use_last", "fail", "escalate"],
+              "default": "fail",
+              "description": "Default 'fail' when absent"
+            },
+            "restart_context": {
+              "type": "boolean",
+              "default": false,
+              "description": "When working memory hits compaction_threshold_tokens, runner starts next iteration with fresh context window; state.memory and state.session persist across restart"
+            }
+          },
+          "additionalProperties": false
         },
         "params": {"type": "object", "additionalProperties": true},
         "ui": {"$ref": "#/definitions/ui"},

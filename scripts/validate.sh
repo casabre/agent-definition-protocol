@@ -28,6 +28,12 @@ schemas = {
     "acs": root / "schemas" / "acs.schema.json",
     "adpkg_metadata": root / "schemas" / "adpkg-metadata-v0.1.schema.json",
     "testing": root / "schemas" / "testing.schema.json",
+    # v0.3.0 sub-schemas (referenced by adp.schema.json via $ref)
+    "memory": root / "schemas" / "memory.schema.json",
+    "workspace": root / "schemas" / "workspace.schema.json",
+    "sandbox": root / "schemas" / "sandbox.schema.json",
+    "artifacts": root / "schemas" / "artifacts.schema.json",
+    "observability": root / "schemas" / "observability.schema.json",
 }
 examples = {
     "adp": [
@@ -37,6 +43,7 @@ examples = {
         root / "samples" / "python" / "langgraph" / "adp" / "agent.yaml",
         root / "fixtures" / "adp_full.yaml",
         root / "fixtures" / "adp_v0.1.0.yaml",
+        root / "fixtures" / "positive" / "valid_interop_agentspec.yaml",
     ],
     "runtime": [root / "examples" / "runtime" / "acme-runtime-example.yaml"],
     "flow": [root / "examples" / "flow" / "acme-flow-example.yaml", root / "samples" / "python" / "langgraph" / "flow.yaml"],
@@ -44,6 +51,12 @@ examples = {
     "acs": [root / "examples" / "acme-analytics" / "acs" / "container.yaml"],
     "adpkg_metadata": [root / "fixtures" / "adpkg_metadata_minimal.yaml"],
     "testing": [],  # tested separately below (x_testing block extraction)
+    # v0.3.0 sub-schemas validated indirectly via adp schema; no standalone examples
+    "memory": [],
+    "workspace": [],
+    "sandbox": [],
+    "artifacts": [],
+    "observability": [],
 }
 negative = {
     "adp": [
@@ -115,4 +128,33 @@ except Exception as e:
     if 'SystemExit' in type(e).__name__:
         raise
     print('OK: correctly rejected invalid_testing_aut_http_type.yaml')
+"
+
+echo "=== AgentSpec semantic validation ==="
+"$PYTHON_BIN" -c "
+import yaml, sys
+sys.path.insert(0, 'sdk/python')
+from adp_sdk.adp_model import ADP
+from adp_sdk.validation import validate_adp_semantics
+
+# Positive fixture: semantic validation must pass
+adp = ADP.model_validate(yaml.safe_load(open('fixtures/positive/valid_interop_agentspec.yaml').read()))
+errors = validate_adp_semantics(adp)
+if errors:
+    raise SystemExit(f'ERROR: valid_interop_agentspec.yaml failed semantic validation: {errors}')
+print('OK: valid_interop_agentspec.yaml passes semantic validation')
+
+# Negative AS-1: node_map key references unknown flow node
+adp = ADP.model_validate(yaml.safe_load(open('fixtures/negative/invalid_interop_agentspec_bad_node_ref.yaml').read()))
+errors = validate_adp_semantics(adp)
+if not any('node_map' in e or 'nonexistent_node' in e for e in errors):
+    raise SystemExit(f'ERROR: AS-1 fixture did not produce expected node_map error; got: {errors}')
+print('OK: invalid_interop_agentspec_bad_node_ref.yaml correctly rejected by AS-1')
+
+# Negative AS-2: llm_map backend_id references unknown execution backend
+adp = ADP.model_validate(yaml.safe_load(open('fixtures/negative/invalid_interop_agentspec_bad_backend_ref.yaml').read()))
+errors = validate_adp_semantics(adp)
+if not any('llm_map' in e or 'backend_id' in e for e in errors):
+    raise SystemExit(f'ERROR: AS-2 fixture did not produce expected llm_map error; got: {errors}')
+print('OK: invalid_interop_agentspec_bad_backend_ref.yaml correctly rejected by AS-2')
 "

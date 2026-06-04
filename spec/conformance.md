@@ -524,3 +524,105 @@ Manifests that used the old AUT adapter types MUST migrate:
 - Replace `aut.adapter.type: "http"` with `aut.endpoint` (override field)
 - Remove `aut.id` (AUT is a singleton; id was removed)
 - Move `timeout_seconds` from `adapter.timeout_seconds` to `aut.timeout_seconds`
+
+---
+
+## ADP v0.3.0 Harness Profiles
+
+ADP v0.3.0 introduces **optional harness conformance profiles** that build on the core conformance classes. These profiles define which v0.3.0 features a conformant implementation MUST support.
+
+| Profile | MUST implement | Description |
+|---|---|---|
+| `ADP-Harness-Memory` | `memory.stores[]`, `memory.working` (incl. compaction threshold), `memory.context_assembly` (incl. static_injection), checks 18–21, 21b, 21c, 24 | Memory & context layer with external stores and in-process working memory |
+| `ADP-Harness-Loops` | `loop` node `max_iterations` + `max_tokens` enforcement; `on_max_exceeded`; `restart_context`; `loop_policy` fallback; checks 15, 15b, 16 | Orchestration loops with bounded iteration |
+| `ADP-Harness-ToolPolicy` | `policy.retry`, `policy.timeout_ms`, `load_strategy` (incl. on_demand mechanics); checks 17, 29 | Tooling policy with retry, timeout, cache, rate-limit |
+| `ADP-Harness-Safety` | `guardrails.interrupts[]` with HITL resume protocol + `execution_mode` (for block/log modes); `agent_trust` enforcement table; `guardrails.cost` (incl. downgrade); checks 22, 22b, 23, 30 | Extended guardrails with HITL, cost enforcement, agent trust |
+| `ADP-Harness-Workspace` | `workspace` section; filesystem + git binding; remote mounts; checks 25, 25b, 26, 31 | Workspace & storage harness primitive |
+| `ADP-Harness-Sandbox` | `tools.sandbox[]` with provider abstraction + snapshotting; code execution + browser binding; credential isolation rule; sandbox\<->workspace permission precedence; checks 27–28, 32 | Execution sandbox harness primitive |
+| `ADP-Harness-Artifacts` | `artifacts.stores[]`; versioning semantics; session/user/agent scoping; checks 33–34 | Versioned named outputs |
+| `ADP-Harness-Observability` | `observability.tracing` with OTel backend; `observability.cost_reporting`; trace events enum; checks 35, 35b | Declarative tracing configuration |
+| `ADP-Harness-Adapters` | `runtime.adapter_hints` for all 8 frameworks; checks 36, 37 | SDK-level framework adapter modules |
+
+---
+
+## New Semantic Validation Checks (v0.3.0)
+
+ADP v0.3.0 adds 19 new semantic validation checks (15–35b), bringing the total to 35 checks.
+
+### Loop Checks
+
+| Check | Description | Severity | Section |
+|---|---|---|---|
+| **Check 15** | `loop.body_nodes[]` must reference known node IDs in `flow.graph.nodes[]` | ERROR | [adp-v0.3.0-loops.md](adp-v0.3.0-loops.md) |
+| **Check 15b** | `loop.body_nodes[]` must contain at least 2 nodes connected by at least one edge in `flow.graph.edges[]` | ERROR | [adp-v0.3.0-loops.md](adp-v0.3.0-loops.md) |
+| **Check 16** | Loop node MUST NOT reference itself (directly or transitively) in `body_nodes` | ERROR | [adp-v0.3.0-loops.md](adp-v0.3.0-loops.md) |
+
+### Tool Policy Checks
+
+| Check | Description | Severity | Section |
+|---|---|---|---|
+| **Check 17** | `policy.cache.key_fields[]` entries MUST use dot-path notation (no `$` prefix, no bracket notation) | ERROR | [adp-v0.3.0-tools-policy.md](adp-v0.3.0-tools-policy.md) |
+| **Check 29** | Any tool with `load_strategy: "on_demand"` MUST have a non-empty `description` field | ERROR | [adp-v0.3.0-tools-policy.md](adp-v0.3.0-tools-policy.md) |
+
+### Memory Checks
+
+| Check | Description | Severity | Section |
+|---|---|---|---|
+| **Check 18** | `memory.stores[]` IDs must be unique (post-composition) | ERROR | [adp-v0.3.0-memory.md](adp-v0.3.0-memory.md) |
+| **Check 19** | `memory.operations[].store_ref` must reference a known `stores[].id` | ERROR | [adp-v0.3.0-memory.md](adp-v0.3.0-memory.md) |
+| **Check 20** | `memory.context_assembly.order[].store_ref` must reference a known `stores[].id` | ERROR | [adp-v0.3.0-memory.md](adp-v0.3.0-memory.md) |
+| **Check 21** | `memory.working.summary_model_ref` (when present) must reference a known `runtime.models[].id` | ERROR | [adp-v0.3.0-memory.md](adp-v0.3.0-memory.md) |
+| **Check 21b** | `memory.working.summary_model_ref` MUST be present when `memory.working.strategy = "summary"` | ERROR | [adp-v0.3.0-memory.md](adp-v0.3.0-memory.md) |
+| **Check 21c** | `memory.working.compaction_threshold_tokens` (when present) MUST be \<= `memory.working.max_tokens` | ERROR | [adp-v0.3.0-memory.md](adp-v0.3.0-memory.md) |
+| **Check 24** | `memory.context_assembly.static_injection[].path` (when `source: "file"`) must be a relative path without `..` traversal; must also reference a declared `workspace` | ERROR | [adp-v0.3.0-memory.md](adp-v0.3.0-memory.md) |
+
+### Guardrails Checks
+
+| Check | Description | Severity | Section |
+|---|---|---|---|
+| **Check 22** | `guardrails.interrupts[].tool_refs[]` must reference known tool IDs | ERROR | [adp-v0.3.0-guardrails.md](adp-v0.3.0-guardrails.md) |
+| **Check 22b** | `guardrails.interrupts[].execution_mode` MUST NOT be set when `mode: "pause_and_notify"` | ERROR | [adp-v0.3.0-guardrails.md](adp-v0.3.0-guardrails.md) |
+| **Check 23** | `guardrails.cost.interrupt_ref` (when present) must reference a known `guardrails.interrupts[].id` | ERROR | [adp-v0.3.0-guardrails.md](adp-v0.3.0-guardrails.md) |
+| **Check 30** | `guardrails.cost.downgrade_model_ref` MUST be present when `on_threshold_exceeded: "downgrade"`; it MUST reference a known `runtime.models[].id` | ERROR | [adp-v0.3.0-guardrails.md](adp-v0.3.0-guardrails.md) |
+
+### Workspace Checks
+
+| Check | Description | Severity | Section |
+|---|---|---|---|
+| **Check 25** | `workspace.permissions.write[]` paths MUST NOT escape `workspace.root` (no `..` traversal) | ERROR | [adp-v0.3.0-workspace.md](adp-v0.3.0-workspace.md) |
+| **Check 25b** | Exactly one of `workspace.root` or `workspace.root_env_var` MUST be present | ERROR | [adp-v0.3.0-workspace.md](adp-v0.3.0-workspace.md) |
+| **Check 26** | `workspace.git.auto_commit: true` requires `workspace.git.enabled: true` | ERROR | [adp-v0.3.0-workspace.md](adp-v0.3.0-workspace.md) |
+| **Check 31** | `workspace.mounts[].id` values must be unique; `workspace.mounts[].target` paths MUST NOT escape `workspace.root` | ERROR | [adp-v0.3.0-workspace.md](adp-v0.3.0-workspace.md) |
+
+### Sandbox Checks
+
+| Check | Description | Severity | Section |
+|---|---|---|---|
+| **Check 27** | `tools.sandbox[].policy.timeout_ms` MUST be present (no unbounded sandbox execution) | ERROR | [adp-v0.3.0-sandbox.md](adp-v0.3.0-sandbox.md) |
+| **Check 28** | `tools.sandbox[].mounts[].source: "workspace"` requires a `workspace` section to be declared | ERROR | [adp-v0.3.0-sandbox.md](adp-v0.3.0-sandbox.md) |
+| **Check 32** | `tools.sandbox[].snapshot.enabled: true` with `provider: "custom"` emits a WARNING (custom providers may not support snapshots) | WARNING | [adp-v0.3.0-sandbox.md](adp-v0.3.0-sandbox.md) |
+
+### Artifacts Checks
+
+| Check | Description | Severity | Section |
+|---|---|---|---|
+| **Check 33** | `artifacts.stores[].id` must be unique | ERROR | [adp-v0.3.0-artifacts.md](adp-v0.3.0-artifacts.md) |
+| **Check 34** | `nodes[].params.artifact.store_ref` must reference a known `artifacts.stores[].id` | ERROR | [adp-v0.3.0-artifacts.md](adp-v0.3.0-artifacts.md) |
+
+### Observability Checks
+
+| Check | Description | Severity | Section |
+|---|---|---|---|
+| **Check 35** | `observability.tracing.trace_events[]` entries must be from the valid enum | ERROR | [adp-v0.3.0-observability.md](adp-v0.3.0-observability.md) |
+| **Check 35b** | `observability.cost_reporting.model_refs[]` (when present) must reference known `runtime.models[].id` values | ERROR | [adp-v0.3.0-observability.md](adp-v0.3.0-observability.md) |
+
+### Adapters Checks
+
+| Check | Description | Severity | Section |
+|---|---|---|---|
+| **Check 36** | `runtime.adapter_hints` keys MUST be from the known framework enum; unknown keys emit a WARNING | WARNING | [adp-v0.3.0-adapters.md](adp-v0.3.0-adapters.md) |
+| **Check 37** | `import_from()` MUST place untranslatable fields into `manifest.extensions` | WARNING | [adp-v0.3.0-adapters.md](adp-v0.3.0-adapters.md) |
+
+---
+
+*Expert skills applied: `role-senior-software-engineer`, `role-senior-agentic-ai-developer`*

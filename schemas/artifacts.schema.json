@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://casabre.github.io/agent-definition-protocol/schemas/artifacts.schema.json",
+  "title": "Artifacts v0.3.0",
+  "type": "object",
+  "description": "Versioned named outputs - named, versioned binary/text outputs produced by an agent run. Distinct from memory stores (retrieval-oriented) and workspace (mutable scratch FS). Artifacts are immutable once written: each write produces a new version; older versions are preserved.",
+  "required": ["stores"],
+  "properties": {
+    "stores": {
+      "type": "array",
+      "description": "Artifact storage backends.",
+      "items": {
+        "type": "object",
+        "required": ["id", "scope", "provider"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "scope": {
+            "type": "string",
+            "enum": ["session", "user", "agent"],
+            "description": "session: artifact visible only within current session; user: artifact visible across sessions for same user; agent: artifact visible across all sessions for this agent"
+          },
+          "provider": {
+            "type": "string",
+            "enum": ["gcs", "s3", "azure_blob", "inmemory", "local"]
+          },
+          "bucket": {"type": "string"},
+          "path_prefix": {"type": "string", "description": "Storage path prefix; absent = no prefix"},
+          "ttl_seconds": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Time-to-live in seconds; absent = no expiry"
+          },
+          "versioned": {
+            "type": "boolean",
+            "default": true,
+            "description": "If true, each write increments version counter; if false, latest write overwrites"
+          },
+          "credentials_env_var": {"type": "string"}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

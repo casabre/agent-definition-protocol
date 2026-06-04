@@ -210,6 +210,7 @@ ADP is designed to work with existing protocols:
 - **MCP**: Model Context Protocol for tool integration
 - **OCI**: Open Container Initiative for packaging
 - **A2A**: Agent-to-Agent protocol mapping (see [integrations/a2a-mapping.md](integrations/a2a-mapping.md))
+- **AgentSpec**: Oracle AgentSpec flow IR mapping (see [integrations/agentspec-mapping.md](integrations/agentspec-mapping.md))
 - **OpenTelemetry**: Telemetry integration (see [interop-mapping.md](interop-mapping.md))
 
 See [interop-mapping.md](interop-mapping.md) for detailed mappings.
@@ -276,3 +277,37 @@ See [`roadmap.md`](../roadmap.md) for details.
 - [Interoperability Mapping](interop-mapping.md)
 - [Execution Semantics Profile (ESP)](esp.md) (v0.2.0+)
 
+
+---
+
+## v0.3.0 Backward Compatibility Note
+
+The `memory` block in v0.1.0 is a flat 4-field object with `provider`, `endpoint`, `index`, and `namespace`. In v0.3.0, this was extended to support a structured format with `stores[]`, `working`, `context_assembly`, `operations`, and `retention`.
+
+**Backward compatibility rule**: A runner seeing root-level `provider` on `memory` MUST silently upcast it to the v0.3.0 structured format:
+
+```yaml
+# v0.1.0 / v0.2.0 format (still valid in v0.3.0)
+memory:
+  provider: "pinecone"
+  endpoint: "https://..."
+  index: "agent-knowledge"
+  namespace: "default"
+
+# Runner upcasts to v0.3.0 equivalent:
+memory:
+  stores:
+    - id: "legacy-store"
+      type: "semantic"
+      provider: "pinecone"
+      endpoint: "https://..."
+      index: "agent-knowledge"
+      scope: "agent"
+      namespace: "default"
+```
+
+All v0.1.0 and v0.2.0 manifests remain valid in v0.3.0. The `adp_version` field accepts `"0.1.0"`, `"0.2.0"`, and `"0.3.0"`.
+
+---
+
+*Expert skills applied: `role-senior-software-engineer`, `role-senior-agentic-ai-developer`*

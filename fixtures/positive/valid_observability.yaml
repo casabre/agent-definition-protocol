@@ -1,0 +1,46 @@
+adp_version: 0.3.0
+id: valid-observability-example
+runtime:
+  execution:
+  - id: primary
+    backend: python
+    entrypoint: main.py
+  models:
+  - id: primary
+    provider: openai
+    model: gpt-4o
+  - id: fallback
+    provider: openai
+    model: gpt-4
+flow:
+  id: main
+  graph:
+    nodes:
+    - id: input
+      kind: input
+    - id: output
+      kind: output
+    edges: []
+    start_nodes:
+    - input
+    end_nodes:
+    - output
+observability:
+  tracing:
+    backend: otlp
+    endpoint_env_var: OTEL_EXPORTER_OTLP_ENDPOINT
+    api_key_env_var: OTEL_API_KEY
+    trace_events:
+    - model_request
+    - tool_call
+    - flow_node
+    - loop_iteration
+    sampling_rate: 1.0
+    service_name: my-agent
+  cost_reporting:
+    enabled: true
+    track_by: session
+    emit_metric: gen_ai.cost.usd
+    model_refs:
+    - primary
+    - fallback

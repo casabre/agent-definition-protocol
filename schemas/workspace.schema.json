@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://casabre.github.io/agent-definition-protocol/schemas/workspace.schema.json",
+  "title": "Workspace & Storage v0.3.0",
+  "type": "object",
+  "description": "Filesystem harness primitive - durable storage, workspace for reading/writing data, cross-session persistence, and git-based versioning.",
+  "required": ["root"],
+  "oneOf": [
+    {
+      "title": "Literal root path",
+      "required": ["root"],
+      "properties": {
+        "root": {"type": "string", "minLength": 1}
+      }
+    },
+    {
+      "title": "Environment variable root path",
+      "required": ["root_env_var"],
+      "properties": {
+        "root_env_var": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Env var name (e.g. AGENT_WORKSPACE_ROOT); consistent with tools.http_apis[].auth.env_var pattern"
+        }
+      }
+    }
+  ],
+  "properties": {
+    "root": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Workspace root as a literal path"
+    },
+    "root_env_var": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Env var name holding the workspace root path"
+    },
+    "git": {
+      "type": "object",
+      "description": "Git configuration for workspace versioning.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Runner MUST have git available if true"
+        },
+        "auto_commit": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, runner commits agent outputs after each successful invocation"
+        },
+        "branch_per_session": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, runner creates a git branch per session_id"
+        }
+      },
+      "additionalProperties": false
+    },
+    "permissions": {
+      "type": "object",
+      "description": "Filesystem permission restrictions.",
+      "properties": {
+        "read": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": ["**"],
+          "description": "Glob patterns for readable paths"
+        },
+        "write": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [],
+          "description": "Glob patterns for writable paths; empty = read-only workspace"
+        },
+        "exec": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [],
+          "description": "Glob patterns for executable paths; empty = no execution permission"
+        }
+      },
+      "additionalProperties": false
+    },
+    "mounts": {
+      "type": "array",
+      "description": "Remote storage mounts: cloud buckets/stores mounted into workspace as directories.",
+      "items": {
+        "type": "object",
+        "required": ["id", "provider", "target"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "provider": {
+            "type": "string",
+            "enum": ["s3", "gcs", "azure_blob", "cloudflare_r2"]
+          },
+          "bucket": {"type": "string"},
+          "prefix": {
+            "type": "string",
+            "description": "Only mount objects under this prefix"
+          },
+          "target": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Mount point relative to workspace.root; MUST NOT escape workspace.root (no .. traversal)"
+          },
+          "read_only": {
+            "type": "boolean",
+            "default": true
+          },
+          "credentials_env_var": {
+            "type": "string",
+            "description": "Env var name holding credentials (NOT the value itself); consistent with auth.env_var pattern"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "cleanup": {
+      "type": "object",
+      "description": "Workspace cleanup policy.",
+      "properties": {
+        "on": {
+          "type": "string",
+          "enum": ["agent_stop", "session_end", "never"],
+          "default": "never"
+        },
+        "exclude": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Paths to preserve on cleanup (glob patterns)"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,50 @@
+adp_version: 0.3.0
+id: test-artifacts-versioning
+runtime:
+  execution:
+  - id: primary
+    backend: python
+    entrypoint: main.py
+  models:
+  - id: primary
+    provider: openai
+    model: gpt-4
+flow:
+  id: main
+  graph:
+    nodes:
+    - id: input
+      kind: input
+    - id: generate-report
+      kind: llm
+      model_ref: primary
+      params:
+        artifact:
+          store_ref: run-outputs
+          name: analysis-report.md
+          content_field: output
+    - id: output
+      kind: output
+    edges:
+    - from: input
+      to: generate-report
+    - from: generate-report
+      to: output
+    start_nodes:
+    - input
+    end_nodes:
+    - output
+artifacts:
+  stores:
+  - id: run-outputs
+    scope: session
+    provider: local
+    path_prefix: outputs/
+    versioned: true
+    ttl_seconds: 86400
+  - id: user-reports
+    scope: user
+    provider: gcs
+    bucket: agent-user-reports
+    versioned: true
+    credentials_env_var: GCS_CREDENTIALS

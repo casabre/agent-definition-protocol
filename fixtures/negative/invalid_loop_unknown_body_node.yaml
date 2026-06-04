@@ -1,0 +1,32 @@
+adp_version: "0.3.0"
+id: "test-invalid-loop"
+runtime:
+  execution:
+    - id: "primary"
+      backend: "python"
+      entrypoint: "main.py"
+flow:
+  id: "main"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+      - id: "llm"
+        kind: "llm"
+        model_ref: "primary"
+      - id: "output"
+        kind: "output"
+      - id: "loop1"
+        kind: "loop"
+        body_nodes: ["input", "nonexistent-node"]
+        termination:
+          condition: "context.llm.output != null"
+          max_iterations: 5
+    edges:
+      - from: "input"
+        to: "llm"
+      - from: "llm"
+        to: "output"
+    start_nodes: ["input"]
+    end_nodes: ["output"]
+evaluation: {}

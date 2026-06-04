@@ -1,0 +1,23 @@
+adp_version: "0.3.0"
+id: "test-invalid-loop-self-ref"
+runtime:
+  execution:
+    - id: "primary"
+      backend: "python"
+      entrypoint: "main.py"
+flow:
+  id: "main"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+      - id: "self-loop"
+        kind: "loop"
+        body_nodes: ["self-loop"]
+        termination:
+          condition: "true"
+          max_iterations: 5
+    edges: []
+    start_nodes: ["input"]
+    end_nodes: ["self-loop"]
+evaluation: {}

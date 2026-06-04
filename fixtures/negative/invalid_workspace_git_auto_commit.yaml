@@ -1,0 +1,28 @@
+adp_version: "0.3.0"
+id: "test-workspace-git-auto-commit"
+runtime:
+  execution:
+    - id: "primary"
+      backend: "python"
+      entrypoint: "main.py"
+  models:
+    - id: "primary"
+      provider: "openai"
+      model: "gpt-4o"
+flow:
+  id: "main"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+      - id: "output"
+        kind: "output"
+    edges: []
+    start_nodes: ["input"]
+    end_nodes: ["output"]
+evaluation: {}
+workspace:
+  root: "/tmp/workspace"
+  git:
+    enabled: false
+    auto_commit: true  # Check 26: auto_commit without enabled

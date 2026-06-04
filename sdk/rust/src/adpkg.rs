@@ -103,7 +103,6 @@ pub fn create_adpkg_with_provenance(
     fs::write(out.join("oci-layout"), OCI_LAYOUT)?;
     Ok(())
 }
-
 pub struct InspectResult {
     pub agent_id: String,
     pub adp_version: String,
@@ -183,13 +182,11 @@ pub fn open_adpkg(path: &str) -> Result<Adp, Box<dyn std::error::Error>> {
     let mut archive = tar::Archive::new(File::open(layer_path)?);
     for entry in archive.entries()? {
         let mut e = entry?;
-        if let Ok(path) = e.path() {
-            if path == std::path::Path::new("adp/agent.yaml") {
-                let mut buf = String::new();
-                e.read_to_string(&mut buf)?;
-                let adp: Adp = serde_yaml::from_str(&buf)?;
-                return Ok(adp);
-            }
+        if e.path().is_ok_and(|p| p == std::path::Path::new("adp/agent.yaml")) {
+            let mut buf = String::new();
+            e.read_to_string(&mut buf)?;
+            let adp: Adp = serde_yaml::from_str(&buf)?;
+            return Ok(adp);
         }
     }
     Err("adp/agent.yaml not found".into())

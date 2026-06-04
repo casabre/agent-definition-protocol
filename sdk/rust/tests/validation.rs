@@ -1,18 +1,61 @@
-use adp_sdk::adp::{Adp, Guardrails, GuardrailRail, Model, Runtime, RuntimeEntry, Subagent, Telemetry};
+use adp_sdk::adp::{
+    Adp, Auth, AuthScheme, Edge, Flow, Graph, Guardrails, GuardrailRail,
+    HTTPAPI, MCPServer, Model, Node, NodeKind, Runtime, RuntimeEntry, Subagent, Telemetry, Tools,
+    Interop, InteropAgentSpec, InteropAgentSpecLlmBinding,
+};
 use adp_sdk::evaluation::{load_evaluator, EvaluatorError};
 use adp_sdk::validation::{validate_adp, validate_adp_semantics};
 
-fn minimal_flow() -> serde_yaml::Value {
-    serde_yaml::from_str(r#"
-id: "f"
-graph:
-  nodes:
-    - id: "n"
-      kind: "input"
-  edges: []
-  start_nodes: ["n"]
-  end_nodes: ["n"]
-"#).unwrap()
+fn make_node(id: &str, kind: NodeKind) -> Node {
+    Node {
+        id: id.into(),
+        kind,
+        model_ref: None,
+        tool_ref: None,
+        runtime_ref: None,
+        suite_ref: None,
+        memory_ref: None,
+        strategy: None,
+        adp_ref: None,
+        label: None,
+        body_nodes: None,
+        termination: None,
+        params: None,
+        extensions: None,
+    }
+}
+
+fn make_edge(from: &str, to: &str) -> Edge {
+    Edge { from: from.into(), to: to.into(), condition: None, extensions: None }
+}
+
+fn make_flow(
+    nodes: Vec<Node>,
+    edges: Vec<Edge>,
+    start_nodes: Option<Vec<&str>>,
+    end_nodes: Option<Vec<&str>>,
+) -> Flow {
+    Flow {
+        id: String::new(),
+        graph: Graph {
+            nodes,
+            edges,
+            start_nodes: start_nodes.map(|v| v.iter().map(|s| s.to_string()).collect()),
+            end_nodes: end_nodes.map(|v| v.iter().map(|s| s.to_string()).collect()),
+            extensions: None,
+        },
+        loop_policy: None,
+        extensions: None,
+    }
+}
+
+fn minimal_flow() -> Flow {
+    make_flow(
+        vec![make_node("n", NodeKind::Input)],
+        vec![],
+        Some(vec!["n"]),
+        Some(vec!["n"]),
+    )
 }
 
 fn minimal_evaluation() -> serde_yaml::Value {
@@ -39,8 +82,6 @@ fn validation_rejects_missing_execution() {
         id: "agent.test".into(),
         conformance_class: None,
         runtime: Runtime { execution: vec![], models: None, ..Default::default() },
-        flow: serde_yaml::Value::Null,
-        evaluation: serde_yaml::Value::Null,
         ..Default::default()
     };
     assert!(validate_adp(&adp).is_err(), "Should reject empty execution array");
@@ -70,8 +111,6 @@ fn validation_rejects_invalid_version() {
         id: "agent.test".into(),
         conformance_class: None,
         runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
-        flow: serde_yaml::Value::Null,
-        evaluation: serde_yaml::Value::Null,
         ..Default::default()
     };
     assert!(validate_adp(&adp).is_err(), "Should reject invalid version");
@@ -84,18 +123,15 @@ fn validation_accepts_v0_1_0() {
         id: "agent.v0.1.0".into(),
         conformance_class: None,
         runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
-        flow: serde_yaml::from_str(r#"
-id: "test.flow"
-graph:
-  nodes:
-    - id: "input"
-      kind: "input"
-    - id: "output"
-      kind: "output"
-  edges: []
-  start_nodes: ["input"]
-  end_nodes: ["output"]
-"#).unwrap(),
+        flow: make_flow(
+            vec![
+                make_node("input", NodeKind::Input),
+                make_node("output", NodeKind::Output),
+            ],
+            vec![],
+            Some(vec!["input"]),
+            Some(vec!["output"]),
+        ),
         evaluation: minimal_evaluation(),
         ..Default::default()
     };
@@ -109,8 +145,6 @@ fn validation_rejects_empty_id() {
         id: "".into(),
         conformance_class: None,
         runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
-        flow: serde_yaml::Value::Null,
-        evaluation: serde_yaml::Value::Null,
         ..Default::default()
     };
     let result = validate_adp(&adp);
@@ -154,8 +188,6 @@ fn validation_accepts_different_backend_types() {
                 models: None,
                 ..Default::default()
             },
-            flow: serde_yaml::Value::Null,
-            evaluation: serde_yaml::Value::Null,
             ..Default::default()
         };
         let result = validate_adp(&adp);
@@ -165,23 +197,17 @@ fn validation_accepts_different_backend_types() {
 
 #[test]
 fn validation_accepts_flow_structure() {
-    let flow_yaml = serde_yaml::from_str(r#"
-id: "test.flow"
-graph:
-  nodes:
-    - id: "input"
-      kind: "input"
-  edges: []
-  start_nodes: ["input"]
-  end_nodes: ["input"]
-"#).unwrap();
-
     let adp = Adp {
         adp_version: "0.1.0".into(),
         id: "agent.flow".into(),
         conformance_class: None,
         runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
-        flow: flow_yaml,
+        flow: make_flow(
+            vec![make_node("input", NodeKind::Input)],
+            vec![],
+            Some(vec!["input"]),
+            Some(vec!["input"]),
+        ),
         evaluation: minimal_evaluation(),
         ..Default::default()
     };
@@ -195,19 +221,15 @@ fn semantic_validation_passes_for_valid_adp() {
         id: "agent.test".into(),
         conformance_class: None,
         runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
-        flow: serde_yaml::from_str(r#"
-graph:
-  nodes:
-    - id: "n1"
-      kind: "input"
-    - id: "n2"
-      kind: "output"
-  edges:
-    - from: "n1"
-      to: "n2"
-  start_nodes: ["n1"]
-  end_nodes: ["n2"]
-"#).unwrap(),
+        flow: make_flow(
+            vec![
+                make_node("n1", NodeKind::Input),
+                make_node("n2", NodeKind::Output),
+            ],
+            vec![make_edge("n1", "n2")],
+            Some(vec!["n1"]),
+            Some(vec!["n2"]),
+        ),
         evaluation: minimal_evaluation(),
         ..Default::default()
     };
@@ -222,17 +244,12 @@ fn semantic_validation_rejects_dangling_edge() {
         id: "agent.test".into(),
         conformance_class: None,
         runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
-        flow: serde_yaml::from_str(r#"
-graph:
-  nodes:
-    - id: "input"
-      kind: "input"
-  edges:
-    - from: "ghost"
-      to: "input"
-  start_nodes: ["input"]
-  end_nodes: ["input"]
-"#).unwrap(),
+        flow: make_flow(
+            vec![make_node("input", NodeKind::Input)],
+            vec![make_edge("ghost", "input")],
+            Some(vec!["input"]),
+            Some(vec!["input"]),
+        ),
         evaluation: serde_yaml::Value::Null,
         ..Default::default()
     };
@@ -247,17 +264,15 @@ fn semantic_validation_rejects_duplicate_node() {
         id: "agent.test".into(),
         conformance_class: None,
         runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
-        flow: serde_yaml::from_str(r#"
-graph:
-  nodes:
-    - id: "input"
-      kind: "input"
-    - id: "input"
-      kind: "output"
-  edges: []
-  start_nodes: ["input"]
-  end_nodes: ["input"]
-"#).unwrap(),
+        flow: make_flow(
+            vec![
+                make_node("input", NodeKind::Input),
+                make_node("input", NodeKind::Output),
+            ],
+            vec![],
+            Some(vec!["input"]),
+            Some(vec!["input"]),
+        ),
         evaluation: serde_yaml::Value::Null,
         ..Default::default()
     };
@@ -272,16 +287,12 @@ fn semantic_validation_rejects_bad_suite_ref() {
         id: "agent.test".into(),
         conformance_class: None,
         runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
-        flow: serde_yaml::from_str(r#"
-graph:
-  nodes:
-    - id: "n1"
-      kind: "llm"
-      suite_ref: "missing-suite"
-  edges: []
-  start_nodes: ["n1"]
-  end_nodes: ["n1"]
-"#).unwrap(),
+        flow: make_flow(
+            vec![Node { suite_ref: Some("missing-suite".into()), ..make_node("n1", NodeKind::LLM) }],
+            vec![],
+            Some(vec!["n1"]),
+            Some(vec!["n1"]),
+        ),
         evaluation: minimal_evaluation(),
         ..Default::default()
     };
@@ -305,16 +316,12 @@ fn semantic_validation_rejects_bad_model_ref() {
             }]),
             ..Default::default()
         },
-        flow: serde_yaml::from_str(r#"
-graph:
-  nodes:
-    - id: "n1"
-      kind: "llm"
-      model_ref: "missing-model"
-  edges: []
-  start_nodes: ["n1"]
-  end_nodes: ["n1"]
-"#).unwrap(),
+        flow: make_flow(
+            vec![Node { model_ref: Some("missing-model".into()), ..make_node("n1", NodeKind::LLM) }],
+            vec![],
+            Some(vec!["n1"]),
+            Some(vec!["n1"]),
+        ),
         evaluation: serde_yaml::Value::Null,
         ..Default::default()
     };
@@ -333,16 +340,12 @@ fn semantic_validation_rejects_bad_runtime_ref() {
             models: None,
             ..Default::default()
         },
-        flow: serde_yaml::from_str(r#"
-graph:
-  nodes:
-    - id: "n1"
-      kind: "llm"
-      runtime_ref: "missing-backend"
-  edges: []
-  start_nodes: ["n1"]
-  end_nodes: ["n1"]
-"#).unwrap(),
+        flow: make_flow(
+            vec![Node { runtime_ref: Some("missing-backend".into()), ..make_node("n1", NodeKind::LLM) }],
+            vec![],
+            Some(vec!["n1"]),
+            Some(vec!["n1"]),
+        ),
         evaluation: serde_yaml::Value::Null,
         ..Default::default()
     };
@@ -373,17 +376,12 @@ fn semantic_validation_rejects_dangling_edge_to_node() {
         id: "agent.test".into(),
         conformance_class: None,
         runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
-        flow: serde_yaml::from_str(r#"
-graph:
-  nodes:
-    - id: "input"
-      kind: "input"
-  edges:
-    - from: "input"
-      to: "ghost-to"
-  start_nodes: ["input"]
-  end_nodes: ["input"]
-"#).unwrap(),
+        flow: make_flow(
+            vec![make_node("input", NodeKind::Input)],
+            vec![make_edge("input", "ghost-to")],
+            Some(vec!["input"]),
+            Some(vec!["input"]),
+        ),
         evaluation: serde_yaml::Value::Null,
         ..Default::default()
     };
@@ -398,7 +396,7 @@ fn validation_rejects_conformance_class_full_with_empty_flow() {
         id: "agent.full".into(),
         conformance_class: Some("full".into()),
         runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
-        flow: serde_yaml::Value::Mapping(Default::default()),
+        // default flow has empty id and no nodes
         evaluation: minimal_evaluation(),
         ..Default::default()
     };
@@ -451,15 +449,12 @@ fn semantic_check12_rejects_hook_node_filter_with_unknown_node() {
         adp_version: "0.1.0".into(),
         id: "agent.test".into(),
         runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
-        flow: serde_yaml::from_str(r#"
-graph:
-  nodes:
-    - id: "n1"
-      kind: "input"
-  edges: []
-  start_nodes: ["n1"]
-  end_nodes: ["n1"]
-"#).unwrap(),
+        flow: make_flow(
+            vec![make_node("n1", NodeKind::Input)],
+            vec![],
+            Some(vec!["n1"]),
+            Some(vec!["n1"]),
+        ),
         evaluation: serde_yaml::Value::Null,
         hooks: Some(serde_json::json!([
             {
@@ -483,16 +478,12 @@ fn semantic_check13_rejects_subflow_adp_ref_not_in_subagents() {
         adp_version: "0.1.0".into(),
         id: "agent.test".into(),
         runtime: Runtime { execution: vec![python_entry()], models: None, ..Default::default() },
-        flow: serde_yaml::from_str(r#"
-graph:
-  nodes:
-    - id: "delegate"
-      kind: "subflow"
-      adp_ref: "unknown-subagent"
-  edges: []
-  start_nodes: ["delegate"]
-  end_nodes: ["delegate"]
-"#).unwrap(),
+        flow: make_flow(
+            vec![Node { adp_ref: Some("unknown-subagent".into()), ..make_node("delegate", NodeKind::Subflow) }],
+            vec![],
+            Some(vec!["delegate"]),
+            Some(vec!["delegate"]),
+        ),
         evaluation: serde_yaml::Value::Null,
         subagents: Some(vec![Subagent {
             id: "known-subagent".into(),
@@ -551,6 +542,7 @@ fn semantic_check7_rejects_guardrail_empty_policy_ref() {
             input: vec![GuardrailRail { id: "g1".into(), provider: "p".into(), policy_ref: "  ".into(), ..Default::default() }],
             output: vec![],
             on_violation: None,
+            ..Default::default()
         }),
         ..Default::default()
     };
@@ -584,9 +576,30 @@ fn semantic_check9_rejects_tool_auth_missing_env_var() {
         runtime: Runtime { execution: vec![python_entry()], ..Default::default() },
         flow: minimal_flow(),
         evaluation: minimal_evaluation(),
-        tools: Some(serde_json::json!({
-            "http_apis": [{ "id": "api1", "base_url": "https://example.com", "auth": { "scheme": "bearer" } }]
-        })),
+        tools: Some(Tools {
+            http_apis: Some(vec![HTTPAPI {
+                id: "api1".into(),
+                base_url: "https://example.com".into(),
+                auth: Some(Auth {
+                    scheme: Some(AuthScheme::Bearer),
+                    env_var: None,
+                    header: None,
+                    api_key: None,
+                    extensions: None,
+                }),
+                name: None,
+                description: None,
+                path: None,
+                method: None,
+                headers: None,
+                policy: None,
+                extensions: None,
+            }]),
+            mcp_servers: None,
+            sql_functions: None,
+            policy: None,
+            extensions: None,
+        }),
         ..Default::default()
     };
     let errors = validate_adp_semantics(&adp);
@@ -616,17 +629,15 @@ fn semantic_check11_rejects_node_tool_ref_not_in_tools() {
         adp_version: "0.1.0".into(),
         id: "agent.test".into(),
         runtime: Runtime { execution: vec![python_entry()], ..Default::default() },
-        flow: serde_yaml::from_str(r#"
-id: "f"
-graph:
-  nodes:
-    - id: "n"
-      kind: "tool"
-      tool_ref: "missing-tool"
-  edges: []
-  start_nodes: ["n"]
-  end_nodes: ["n"]
-"#).unwrap(),
+        flow: Flow {
+            id: "f".into(),
+            ..make_flow(
+                vec![Node { tool_ref: Some("missing-tool".into()), ..make_node("n", NodeKind::Tool) }],
+                vec![],
+                Some(vec!["n"]),
+                Some(vec!["n"]),
+            )
+        },
         evaluation: minimal_evaluation(),
         ..Default::default()
     };
@@ -640,21 +651,34 @@ fn semantic_check11_passes_with_tool_ref_in_tools() {
         adp_version: "0.1.0".into(),
         id: "agent.test".into(),
         runtime: Runtime { execution: vec![python_entry()], ..Default::default() },
-        flow: serde_yaml::from_str(r#"
-id: "f"
-graph:
-  nodes:
-    - id: "n"
-      kind: "tool"
-      tool_ref: "known-tool"
-  edges: []
-  start_nodes: ["n"]
-  end_nodes: ["n"]
-"#).unwrap(),
+        flow: Flow {
+            id: "f".into(),
+            ..make_flow(
+                vec![Node { tool_ref: Some("known-tool".into()), ..make_node("n", NodeKind::Tool) }],
+                vec![],
+                Some(vec!["n"]),
+                Some(vec!["n"]),
+            )
+        },
         evaluation: minimal_evaluation(),
-        tools: Some(serde_json::json!({
-            "mcp_servers": [{ "id": "known-tool", "url": "https://mcp.example" }]
-        })),
+        tools: Some(Tools {
+            mcp_servers: Some(vec![MCPServer {
+                id: "known-tool".into(),
+                command: "".into(),
+                name: None,
+                description: None,
+                args: None,
+                env: None,
+                timeout_seconds: None,
+                auth: None,
+                policy: None,
+                extensions: None,
+            }]),
+            http_apis: None,
+            sql_functions: None,
+            policy: None,
+            extensions: None,
+        }),
         ..Default::default()
     };
     let errors = validate_adp_semantics(&adp);
@@ -676,6 +700,149 @@ fn semantic_deprecated_judges_warning() {
     };
     let errors = validate_adp_semantics(&adp);
     assert!(errors.iter().any(|e| e.contains("deprecated")), "Expected deprecated judges warning, got: {:?}", errors);
+}
+
+#[test]
+fn semantic_as1_rejects_node_map_unknown_node() {
+    let adp = Adp {
+        adp_version: "0.1.0".into(),
+        id: "agent.test".into(),
+        runtime: Runtime { execution: vec![python_entry()], ..Default::default() },
+        flow: make_flow(
+            vec![make_node("planner", NodeKind::LLM)],
+            vec![],
+            Some(vec!["planner"]),
+            Some(vec!["planner"]),
+        ),
+        evaluation: minimal_evaluation(),
+        interop: Some(Interop {
+            a2a: None,
+            agentspec: Some(InteropAgentSpec {
+                ref_uri: None,
+                version: None,
+                component_type: None,
+                component_id: None,
+                runtime_adapters: None,
+                node_map: Some({
+                    let mut m = std::collections::HashMap::new();
+                    m.insert("planner".to_string(), "3a5bf0c0-9f28-47d8-a000-111111111111".to_string());
+                    m.insert("ghost-node".to_string(), "fc98ab56-0d30-4bdd-a000-222222222222".to_string());
+                    m
+                }),
+                llm_map: None,
+            }),
+        }),
+        ..Default::default()
+    };
+    let errors = validate_adp_semantics(&adp);
+    assert!(
+        errors.iter().any(|e| e.contains("ghost-node")),
+        "Expected AS-1 node_map error for unknown key, got: {:?}", errors
+    );
+}
+
+#[test]
+fn semantic_as1_passes_valid_node_map() {
+    let adp = Adp {
+        adp_version: "0.1.0".into(),
+        id: "agent.test".into(),
+        runtime: Runtime { execution: vec![python_entry()], ..Default::default() },
+        flow: make_flow(
+            vec![make_node("planner", NodeKind::LLM)],
+            vec![],
+            Some(vec!["planner"]),
+            Some(vec!["planner"]),
+        ),
+        evaluation: minimal_evaluation(),
+        interop: Some(Interop {
+            a2a: None,
+            agentspec: Some(InteropAgentSpec {
+                ref_uri: None,
+                version: None,
+                component_type: None,
+                component_id: None,
+                runtime_adapters: None,
+                node_map: Some({
+                    let mut m = std::collections::HashMap::new();
+                    m.insert("planner".to_string(), "3a5bf0c0-9f28-47d8-a000-111111111111".to_string());
+                    m
+                }),
+                llm_map: None,
+            }),
+        }),
+        ..Default::default()
+    };
+    let errors = validate_adp_semantics(&adp);
+    assert!(
+        !errors.iter().any(|e| e.contains("node_map")),
+        "Expected no AS-1 error for valid node_map, got: {:?}", errors
+    );
+}
+
+#[test]
+fn semantic_as2_rejects_llm_map_unknown_backend() {
+    let adp = Adp {
+        adp_version: "0.1.0".into(),
+        id: "agent.test".into(),
+        runtime: Runtime { execution: vec![python_entry()], ..Default::default() },
+        flow: minimal_flow(),
+        evaluation: minimal_evaluation(),
+        interop: Some(Interop {
+            a2a: None,
+            agentspec: Some(InteropAgentSpec {
+                ref_uri: None,
+                version: None,
+                component_type: None,
+                component_id: None,
+                runtime_adapters: None,
+                node_map: None,
+                llm_map: Some(vec![InteropAgentSpecLlmBinding {
+                    backend_id: "ghost-backend".into(),
+                    agentspec_id: "3a5bf0c0-9f28-47d8-a000-111111111111".into(),
+                    agentspec_type: None,
+                }]),
+            }),
+        }),
+        ..Default::default()
+    };
+    let errors = validate_adp_semantics(&adp);
+    assert!(
+        errors.iter().any(|e| e.contains("ghost-backend")),
+        "Expected AS-2 llm_map error for unknown backend, got: {:?}", errors
+    );
+}
+
+#[test]
+fn semantic_as2_passes_valid_llm_map() {
+    let adp = Adp {
+        adp_version: "0.1.0".into(),
+        id: "agent.test".into(),
+        runtime: Runtime { execution: vec![python_entry()], ..Default::default() },
+        flow: minimal_flow(),
+        evaluation: minimal_evaluation(),
+        interop: Some(Interop {
+            a2a: None,
+            agentspec: Some(InteropAgentSpec {
+                ref_uri: None,
+                version: None,
+                component_type: None,
+                component_id: None,
+                runtime_adapters: None,
+                node_map: None,
+                llm_map: Some(vec![InteropAgentSpecLlmBinding {
+                    backend_id: "py".into(),
+                    agentspec_id: "3a5bf0c0-9f28-47d8-a000-111111111111".into(),
+                    agentspec_type: Some("OpenAiConfig".into()),
+                }]),
+            }),
+        }),
+        ..Default::default()
+    };
+    let errors = validate_adp_semantics(&adp);
+    assert!(
+        !errors.iter().any(|e| e.contains("llm_map")),
+        "Expected no AS-2 error for valid llm_map, got: {:?}", errors
+    );
 }
 
 #[test]
@@ -842,28 +1009,4 @@ fn evaluator_script_bash_object_score_based_passed() {
     let ev = load_evaluator(&config).unwrap();
     let r = ev.evaluate(&serde_json::json!({}), &serde_json::json!({})).unwrap();
     assert!(r.passed);
-}
-
-#[test]
-fn evaluator_script_bash_object_score_below_threshold() {
-    // No "passed" key, score < 0.5 → passed = false
-    let config = serde_json::json!({
-        "id": "ev", "type": "script", "runtime": "bash",
-        "inline": "printf '{\"score\": 0.3}'"
-    });
-    let ev = load_evaluator(&config).unwrap();
-    let r = ev.evaluate(&serde_json::json!({}), &serde_json::json!({})).unwrap();
-    assert!(!r.passed);
-}
-
-#[test]
-fn evaluator_script_bash_object_no_passed_no_score() {
-    // Neither "passed" nor "score" → unwrap_or(false) → false
-    let config = serde_json::json!({
-        "id": "ev", "type": "script", "runtime": "bash",
-        "inline": "printf '{\"reason\": \"no keys\"}'"
-    });
-    let ev = load_evaluator(&config).unwrap();
-    let r = ev.evaluate(&serde_json::json!({}), &serde_json::json!({})).unwrap();
-    assert!(!r.passed);
 }

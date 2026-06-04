@@ -195,7 +195,11 @@ fn test_create_adpkg_error_paths() {
 id: "invalid"
 runtime:
   execution: []
-flow: {}
+flow:
+  id: "f"
+  graph:
+    nodes: []
+    edges: []
 evaluation: {}
 "#,
     ).unwrap();

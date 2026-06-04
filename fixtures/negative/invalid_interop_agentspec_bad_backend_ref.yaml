@@ -1,0 +1,28 @@
+adp_version: "0.3.0"
+id: agent.acme.bad-backend-ref
+runtime:
+  execution:
+    - id: primary
+      backend: python
+      entrypoint: acme_agents.main:app
+flow:
+  id: acme.flow
+  graph:
+    nodes:
+      - id: input
+        kind: input
+      - id: output
+        kind: output
+    edges:
+      - from: input
+        to: output
+    start_nodes: [input]
+    end_nodes: [output]
+evaluation: {}
+interop:
+  agentspec:
+    # llm_map references "nonexistent-backend" which is not in runtime.execution — invalid
+    llm_map:
+      - backend_id: nonexistent-backend
+        agentspec_id: "3a5bf0c0-9f28-47d8-99b4-be7da6a531c8"
+        agentspec_type: "OpenAiConfig"

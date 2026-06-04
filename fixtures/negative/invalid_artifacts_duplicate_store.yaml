@@ -1,0 +1,33 @@
+adp_version: "0.3.0"
+id: "test-artifacts-duplicate-store"
+runtime:
+  execution:
+    - id: "primary"
+      backend: "python"
+      entrypoint: "main.py"
+  models:
+    - id: "primary"
+      provider: "openai"
+      model: "gpt-4o"
+flow:
+  id: "main"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+      - id: "output"
+        kind: "output"
+    edges: []
+    start_nodes: ["input"]
+    end_nodes: ["output"]
+evaluation: {}
+artifacts:
+  stores:
+    - id: "outputs"  # Check 33: duplicate store id
+      scope: "session"
+      provider: "local"
+      path_prefix: "outputs"
+    - id: "outputs"
+      scope: "user"
+      provider: "s3"
+      bucket: "my-bucket"

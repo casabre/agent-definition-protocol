@@ -1,0 +1,29 @@
+adp_version: "0.3.0"
+id: "test-on-demand-no-desc"
+runtime:
+  execution:
+    - id: "primary"
+      backend: "python"
+      entrypoint: "main.py"
+  models:
+    - id: "primary"
+      provider: "openai"
+      model: "gpt-4o"
+flow:
+  id: "main"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+      - id: "output"
+        kind: "output"
+    edges: []
+    start_nodes: ["input"]
+    end_nodes: ["output"]
+evaluation: {}
+tools:
+  http_apis:
+    - id: "on-demand-tool"
+      description: ""  # Check 29: empty description with on_demand
+      base_url: "https://api.example.com"
+      load_strategy: "on_demand"

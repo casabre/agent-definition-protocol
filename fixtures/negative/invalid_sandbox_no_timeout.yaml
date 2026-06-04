@@ -1,0 +1,36 @@
+adp_version: "0.3.0"
+id: "test-sandbox-no-timeout"
+runtime:
+  execution:
+    - id: "primary"
+      backend: "python"
+      entrypoint: "main.py"
+flow:
+  id: "main"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+      - id: "sandbox-node"
+        kind: "tool"
+        tool_ref: "python-exec"
+      - id: "output"
+        kind: "output"
+    edges:
+      - from: "input"
+        to: "sandbox-node"
+      - from: "sandbox-node"
+        to: "output"
+    start_nodes: ["input"]
+    end_nodes: ["output"]
+evaluation: {}
+tools:
+  sandbox:
+    - id: "python-exec"
+      runtime: "python"
+      provider: "docker"
+      policy:
+        # timeout_ms is MISSING - should fail Check 27
+        max_output_bytes: 1048576
+        network: "none"
+        allow_filesystem_writes: false

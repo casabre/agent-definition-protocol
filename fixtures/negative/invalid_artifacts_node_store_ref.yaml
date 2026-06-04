@@ -1,0 +1,40 @@
+adp_version: "0.3.0"
+id: "test-artifacts-node-store-ref"
+runtime:
+  execution:
+    - id: "primary"
+      backend: "python"
+      entrypoint: "main.py"
+  models:
+    - id: "primary"
+      provider: "openai"
+      model: "gpt-4o"
+flow:
+  id: "main"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+      - id: "writer"
+        kind: "tool"
+        tool_ref: "write-artifact"
+        params:
+          artifact:
+            store_ref: "nonexistent-store"  # Check 34: references unknown store
+      - id: "output"
+        kind: "output"
+    edges: []
+    start_nodes: ["input"]
+    end_nodes: ["output"]
+evaluation: {}
+artifacts:
+  stores:
+    - id: "outputs"
+      scope: "session"
+      provider: "local"
+      path_prefix: "outputs"
+tools:
+  http_apis:
+    - id: "write-artifact"
+      description: "Write artifact"
+      base_url: "https://api.example.com"

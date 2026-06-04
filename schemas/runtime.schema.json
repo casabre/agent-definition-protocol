@@ -26,7 +26,8 @@
           "properties": {
             "recursion_limit": { "type": "integer", "minimum": 1 },
             "stream_mode": { "type": "string", "enum": ["values", "updates", "debug"] },
-            "checkpointer": { "type": "string", "enum": ["memory", "sqlite", "postgres", "none"] }
+            "checkpointer": { "type": "string", "enum": ["memory", "sqlite", "postgres", "none"] },
+            "memory_store": { "type": "string" }
           },
           "additionalProperties": true
         },
@@ -43,7 +44,15 @@
           "properties": {
             "process": { "type": "string", "enum": ["sequential", "hierarchical", "parallel"] },
             "verbose": { "type": "boolean" },
-            "memory": { "type": "boolean" }
+            "memory": { "type": "boolean" },
+            "embedder_config": {
+              "type": "object",
+              "properties": {
+                "provider": { "type": "string" },
+                "model": { "type": "string" }
+              },
+              "additionalProperties": true
+            }
           },
           "additionalProperties": true
         },
@@ -51,6 +60,38 @@
           "type": "object",
           "properties": {
             "execution_type": { "type": "string", "enum": ["sequential", "stepwise"] }
+          },
+          "additionalProperties": true
+        },
+        "llamaindex": {
+          "type": "object",
+          "properties": {
+            "query_engine": { "type": "string" },
+            "vector_store": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "google_adk": {
+          "type": "object",
+          "properties": {
+            "artifact_service": { "type": "string", "enum": ["inmemory", "gcs"] },
+            "session_service": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "openai_agents": {
+          "type": "object",
+          "properties": {
+            "tracing": { "type": "string", "enum": ["otlp", "langfuse", "none"] },
+            "sandbox_provider": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "pydantic_ai": {
+          "type": "object",
+          "properties": {
+            "strict_mode": { "type": "boolean" },
+            "model": { "type": "string" }
           },
           "additionalProperties": true
         }

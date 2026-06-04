@@ -1975,6 +1975,762 @@ overrides:
 }
 
 // ─── Composition: relative extends with mem:// URI that has no path (host only)
+function testValidationWorkspaceMissingRoot() {
+  const adp = {
+    ..._minimalManifest,
+    workspace: {},
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("root")),
+    `Expected workspace root error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationWorkspaceBothRoots() {
+  const adp = {
+    ..._minimalManifest,
+    workspace: { root: "/tmp", root_env_var: "WORKSPACE_ROOT" },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("not both")),
+    `Expected both-root error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationWorkspaceGitAutoCommitRequiresEnabled() {
+  const adp = {
+    ..._minimalManifest,
+    workspace: { root: "/tmp", git: { auto_commit: true, enabled: false } },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("auto_commit")),
+    `Expected auto_commit error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationWorkspaceMountDotDotTarget() {
+  const adp = {
+    ..._minimalManifest,
+    workspace: { root: "/tmp", mounts: [{ id: "m1", target: "../escape", source: {} }] },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("target path")),
+    `Expected mount target error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationObservabilityInvalidTraceEvent() {
+  const adp = {
+    ..._minimalManifest,
+    observability: { tracing: { trace_events: ["model_request", "invalid_event_xyz"] } },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("invalid_event_xyz")),
+    `Expected trace_events error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationObservabilityUnknownCostModelRef() {
+  const adp = {
+    ..._minimalManifest,
+    observability: { cost_reporting: { model_refs: ["ghost-model"] } },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("ghost-model")),
+    `Expected cost_reporting model_refs error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationAS1NodeMapUnknownKey() {
+  const adp = {
+    ..._minimalManifest,
+    interop: {
+      agentspec: {
+        node_map: { "ghost-node": "3a5bf0c0-9f28-47d8-a000-111111111111" },
+      },
+    },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("ghost-node")),
+    `Expected AS-1 node_map error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationGuardrailInterruptPauseAndNotifyWithExecutionMode() {
+  const adp = {
+    ..._minimalManifest,
+    guardrails: {
+      input: [],
+      output: [],
+      interrupts: [{ id: "i1", trigger: "tool_call", mode: "pause_and_notify", execution_mode: "parallel" }],
+    },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("execution_mode") && e.includes("pause_and_notify")),
+    `Expected interrupt execution_mode error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationGuardrailCostInterruptRefUnknown() {
+  const adp = {
+    ..._minimalManifest,
+    guardrails: {
+      input: [],
+      output: [],
+      interrupts: [{ id: "i1", trigger: "tool_call", mode: "block" }],
+      cost: { interrupt_ref: "ghost-interrupt", on_threshold_exceeded: "interrupt" },
+    },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("interrupt_ref")),
+    `Expected cost interrupt_ref error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationGuardrailCostDowngradeMissingRef() {
+  const adp = {
+    ..._minimalManifest,
+    guardrails: {
+      input: [],
+      output: [],
+      cost: { on_threshold_exceeded: "downgrade" },
+    },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("downgrade_model_ref")),
+    `Expected downgrade_model_ref error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationGuardrailCostDowngradeRefUnknownModel() {
+  const adp = {
+    ..._minimalManifest,
+    guardrails: {
+      input: [],
+      output: [],
+      cost: { on_threshold_exceeded: "downgrade", downgrade_model_ref: "ghost-model" },
+    },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("ghost-model")),
+    `Expected downgrade_model_ref unknown model error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationLoopNoBodyNodesNoId() {
+  // Covers lines 220, 229, 260, 261 right ?? branches (loop with no id and no body_nodes)
+  const adp = {
+    ..._minimalManifest,
+    flow: {
+      id: "f",
+      graph: {
+        nodes: [
+          { id: "start", kind: "input" as const },
+          { kind: "loop" as const },  // no id, no body_nodes
+          { id: "end", kind: "output" as const },
+        ],
+        edges: [{ from: "start", to: "end" }],
+        start_nodes: ["start"],
+        end_nodes: ["end"],
+      },
+    },
+  } as any;
+  // Just verify no crash; the loop node without id/body_nodes is valid for this check
+  const errors = validateAdpSemantics(adp);
+  assert.ok(Array.isArray(errors), "Expected errors to be an array");
+}
+
+function testValidationLoopBodyNodeInnerLoopNoBodyNodes() {
+  // Covers line 269 right ?? branch (inner loop body_node that is a loop with no body_nodes)
+  const adp = {
+    ..._minimalManifest,
+    flow: {
+      id: "f",
+      graph: {
+        nodes: [
+          { id: "start", kind: "input" as const },
+          { id: "outer", kind: "loop" as const, body_nodes: ["inner"] },
+          { id: "inner", kind: "loop" as const },  // loop body node with no body_nodes
+          { id: "end", kind: "output" as const },
+        ],
+        edges: [{ from: "start", to: "outer" }, { from: "outer", to: "end" }],
+        start_nodes: ["start"],
+        end_nodes: ["end"],
+      },
+    },
+  } as any;
+  // Inner loop has no body_nodes: line 269's ?? right branch is taken, and no circular ref error
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    !errors.some((e: string) => e.includes("circular")),
+    `Expected no circular loop error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationToolCacheKeyFieldsBadNotationNoId() {
+  // Covers line 287 right ?? branch (tool without id in key_fields error message)
+  const adp = {
+    ..._minimalManifest,
+    tools: {
+      mcp_servers: [{
+        uri: "http://localhost:8080",
+        policy: { cache: { key_fields: ["not dot path!"] } },
+      }],
+    },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("key_fields") && e.includes("dot-path")),
+    `Expected cache key_fields dot-path error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationLoopBodyNodeUnknownRef() {
+  const adp = {
+    ..._minimalManifest,
+    flow: {
+      id: "f",
+      graph: {
+        nodes: [
+          { id: "start", kind: "input" as const },
+          { id: "l1", kind: "loop" as const, body_nodes: ["a", "ghost-node"] },
+          { id: "a", kind: "llm" as const },
+          { id: "end", kind: "output" as const },
+        ],
+        edges: [{ from: "start", to: "l1" }, { from: "l1", to: "end" }],
+        start_nodes: ["start"],
+        end_nodes: ["end"],
+      },
+    },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("ghost-node") && e.includes("body_nodes")),
+    `Expected loop body_node unknown ref error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationLoopBodyNodesConnected() {
+  // Exercises the hasConnection=true path (Check 15b happy path — no error expected)
+  const adp = {
+    ..._minimalManifest,
+    flow: {
+      id: "f",
+      graph: {
+        nodes: [
+          { id: "start", kind: "input" as const },
+          { id: "l1", kind: "loop" as const, body_nodes: ["a", "b"] },
+          { id: "a", kind: "llm" as const },
+          { id: "b", kind: "llm" as const },
+          { id: "end", kind: "output" as const },
+        ],
+        edges: [
+          { from: "start", to: "l1" },
+          { from: "a", to: "b" },
+          { from: "l1", to: "end" },
+        ],
+        start_nodes: ["start"],
+        end_nodes: ["end"],
+      },
+    },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    !errors.some((e: string) => e.includes("l1") && e.includes("body_nodes") && e.includes("edge")),
+    `Expected no loop body_nodes edge error for connected nodes, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationLoopBodyNodesNoEdge() {
+  const adp = {
+    ..._minimalManifest,
+    flow: {
+      id: "f",
+      graph: {
+        nodes: [
+          { id: "start", kind: "input" as const },
+          { id: "l1", kind: "loop" as const, body_nodes: ["a", "b"] },
+          { id: "a", kind: "llm" as const },
+          { id: "b", kind: "llm" as const },
+          { id: "end", kind: "output" as const },
+        ],
+        edges: [{ from: "start", to: "l1" }, { from: "l1", to: "end" }],
+        start_nodes: ["start"],
+        end_nodes: ["end"],
+      },
+    },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("l1") && e.includes("body_nodes")),
+    `Expected loop body_nodes no-edge error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationLoopSelfReference() {
+  const adp = {
+    ..._minimalManifest,
+    flow: {
+      id: "f",
+      graph: {
+        nodes: [
+          { id: "start", kind: "input" as const },
+          { id: "l1", kind: "loop" as const, body_nodes: ["l1", "a"] },
+          { id: "a", kind: "llm" as const },
+          { id: "end", kind: "output" as const },
+        ],
+        edges: [{ from: "start", to: "l1" }, { from: "l1", to: "end" }],
+        start_nodes: ["start"],
+        end_nodes: ["end"],
+      },
+    },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("l1") && e.includes("MUST NOT reference")),
+    `Expected loop self-reference error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationLoopCircularReference() {
+  const adp = {
+    ..._minimalManifest,
+    flow: {
+      id: "f",
+      graph: {
+        nodes: [
+          { id: "start", kind: "input" as const },
+          { id: "l1", kind: "loop" as const, body_nodes: ["l2"] },
+          { id: "l2", kind: "loop" as const, body_nodes: ["l1"] },
+          { id: "end", kind: "output" as const },
+        ],
+        edges: [{ from: "start", to: "l1" }, { from: "l1", to: "end" }],
+        start_nodes: ["start"],
+        end_nodes: ["end"],
+      },
+    },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("circular")),
+    `Expected circular loop reference error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationToolCacheKeyFieldsBadNotation() {
+  const adp = {
+    ..._minimalManifest,
+    tools: {
+      mcp_servers: [{
+        id: "my-server",
+        uri: "http://localhost:8080",
+        policy: { cache: { key_fields: ["not dot path!"] } },
+      }],
+    },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("key_fields") && e.includes("dot-path")),
+    `Expected cache key_fields dot-path error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationToolOnDemandMissingDescription() {
+  const adp = {
+    ..._minimalManifest,
+    tools: {
+      mcp_servers: [{
+        id: "my-server",
+        uri: "http://localhost:8080",
+        load_strategy: "on_demand",
+        description: "",
+      }],
+    },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("on_demand") && e.includes("description")),
+    `Expected on_demand missing description error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationToolOnDemandNoDescriptionProperty() {
+  // Covers line 298 right ?? branch (description absent) and line 300 right ?? branch (id absent)
+  const adp = {
+    ..._minimalManifest,
+    tools: {
+      mcp_servers: [{ uri: "http://localhost:8080", load_strategy: "on_demand" }],
+    },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("on_demand") && e.includes("description")),
+    `Expected on_demand missing description error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationToolOnDemandNonEmptyDescription() {
+  // Covers line 299 false branch (non-empty description → no error)
+  const adp = {
+    ..._minimalManifest,
+    tools: {
+      mcp_servers: [{ id: "s", uri: "http://localhost:8080", load_strategy: "on_demand", description: "valid description" }],
+    },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    !errors.some((e: string) => e.includes("on_demand") && e.includes("description")),
+    `Expected no on_demand description error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationMemoryStaticInjectionNoPathProperty() {
+  // Covers line 363 right ?? branch (path absent → "" → only workspace error fires)
+  const adp = {
+    ..._minimalManifest,
+    memory: {
+      context_assembly: {
+        static_injection: [{ source: "file" }],
+      },
+    },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("workspace")),
+    `Expected static_injection workspace error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationGuardrailInterruptNoIdPauseAndNotify() {
+  // Covers line 395 right ?? branch (no interrupt.id → "?" fallback)
+  const adp = {
+    ..._minimalManifest,
+    guardrails: {
+      input: [], output: [],
+      interrupts: [{ trigger: "tool_call", mode: "pause_and_notify", execution_mode: "parallel" }],
+    },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("execution_mode") && e.includes("pause_and_notify")),
+    `Expected interrupt execution_mode error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationWorkspaceMountNoTarget() {
+  // Covers line 447 right ?? branch (mount.target absent → "" → no ".." error)
+  const adp = {
+    ..._minimalManifest,
+    workspace: { root: "/tmp", mounts: [{ id: "m1", source: "bind" }] },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    !errors.some((e: string) => e.includes("m1") && e.includes("target")),
+    `Expected no mount target error for mount without target, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationSandboxNoPolicyNoId() {
+  // Covers line 466 right ?? branch (no policy), line 477/486 right ?? branches (no id)
+  const adp = {
+    ..._minimalManifest,
+    tools: {
+      sandbox: [{
+        image: "ubuntu:22.04",
+        mounts: [{ source: "workspace" }],
+        snapshot: { enabled: true },
+        provider: "custom",
+      }],
+    },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("timeout_ms")),
+    `Expected sandbox timeout_ms error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationSandboxWithTimeoutMs() {
+  // Covers line 468 false branch (timeout_ms present → no check-27 error)
+  const adp = {
+    ..._minimalManifest,
+    tools: {
+      sandbox: [{ id: "sb", image: "ubuntu:22.04", policy: { timeout_ms: 30000 } }],
+    },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    !errors.some((e: string) => e.includes("timeout_ms")),
+    `Expected no timeout_ms error for sandbox with timeout, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationMemoryDuplicateStoreId() {
+  const adp = {
+    ..._minimalManifest,
+    memory: { stores: [{ id: "s1", backend: "redis" }, { id: "s1", backend: "redis" }] },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("duplicate store id") && e.includes("s1")),
+    `Expected memory duplicate store id error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationMemoryOperationUnknownStoreRef() {
+  const adp = {
+    ..._minimalManifest,
+    memory: {
+      stores: [{ id: "s1", backend: "redis" }],
+      operations: [{ id: "op1", store_ref: "ghost-store", type: "read" }],
+    },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("ghost-store") && e.includes("operations")),
+    `Expected memory operations store_ref error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationMemoryContextAssemblyOrderUnknownStoreRef() {
+  const adp = {
+    ..._minimalManifest,
+    memory: {
+      stores: [{ id: "s1", backend: "redis" }],
+      context_assembly: { order: [{ store_ref: "ghost-store" }] },
+    },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("ghost-store") && e.includes("context_assembly")),
+    `Expected memory context_assembly order store_ref error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationMemoryWorkingSummaryModelRefUnknown() {
+  const adp = {
+    ..._minimalManifest,
+    memory: { working: { summary_model_ref: "ghost-model" } },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("ghost-model") && e.includes("summary_model_ref")),
+    `Expected memory working summary_model_ref unknown error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationMemoryWorkingSummaryMissingRef() {
+  const adp = {
+    ..._minimalManifest,
+    memory: { working: { strategy: "summary" } },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("summary_model_ref") && e.includes("summary")),
+    `Expected summary_model_ref missing error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationMemoryWorkingCompactionExceedsMax() {
+  const adp = {
+    ..._minimalManifest,
+    memory: { working: { compaction_threshold_tokens: 5000, max_tokens: 2000 } },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("compaction_threshold_tokens") && e.includes("max_tokens")),
+    `Expected compaction > max_tokens error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationMemoryStaticInjectionBadPath() {
+  const adp = {
+    ..._minimalManifest,
+    memory: {
+      context_assembly: {
+        static_injection: [{ source: "file", path: "../escaped/file.txt" }],
+      },
+    },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("../escaped/file.txt") && e.includes("relative")),
+    `Expected static_injection bad path error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationMemoryStaticInjectionNoWorkspace() {
+  const adp = {
+    ..._minimalManifest,
+    memory: {
+      context_assembly: {
+        static_injection: [{ source: "file", path: "data/context.txt" }],
+      },
+    },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("data/context.txt") && e.includes("workspace")),
+    `Expected static_injection requires workspace error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationGuardrailInterruptToolRefUnknown() {
+  const adp = {
+    ..._minimalManifest,
+    guardrails: {
+      input: [],
+      output: [],
+      interrupts: [{ id: "i1", trigger: "tool_call", mode: "block", tool_refs: ["ghost-tool"] }],
+    },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("ghost-tool") && e.includes("tool_ref")),
+    `Expected interrupt tool_ref unknown error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationWorkspaceWritePathEscape() {
+  const adp = {
+    ..._minimalManifest,
+    workspace: { root: "/tmp", permissions: { write: ["../escape"] } },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("../escape")),
+    `Expected workspace write path escape error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationWorkspaceDuplicateMountId() {
+  const adp = {
+    ..._minimalManifest,
+    workspace: { root: "/tmp", mounts: [{ id: "m1", target: "/a" }, { id: "m1", target: "/b" }] },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("m1")),
+    `Expected duplicate mount id error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationSandboxMissingTimeout() {
+  const adp = {
+    ..._minimalManifest,
+    tools: { sandbox: [{ id: "sb1", runtime: "python", policy: {} }] },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("timeout_ms")),
+    `Expected sandbox timeout error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationSandboxMountWorkspaceWithoutDeclaration() {
+  const adp = {
+    ..._minimalManifest,
+    tools: {
+      sandbox: [{ id: "sb1", runtime: "python", policy: { timeout_ms: 5000 }, mounts: [{ source: "workspace", target: "/work" }] }],
+    },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("workspace")),
+    `Expected sandbox workspace mount error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationSandboxSnapshotCustomProviderWarning() {
+  const adp = {
+    ..._minimalManifest,
+    tools: {
+      sandbox: [{ id: "sb1", runtime: "python", provider: "custom", policy: { timeout_ms: 5000 }, snapshot: { enabled: true } }],
+    },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("WARNING") && e.includes("custom")),
+    `Expected sandbox custom provider warning, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationArtifactsDuplicateStore() {
+  const adp = {
+    ..._minimalManifest,
+    artifacts: { stores: [{ id: "store1", provider: "local" }, { id: "store1", provider: "gcs" }] },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("store1")),
+    `Expected duplicate artifact store error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationArtifactNodeStoreRefUnknown() {
+  const adp = {
+    ..._minimalManifest,
+    flow: {
+      id: "f",
+      graph: {
+        nodes: [{ id: "n", kind: "llm", params: { artifact: { store_ref: "ghost-store" } } }],
+        edges: [],
+        start_nodes: ["n"],
+        end_nodes: ["n"],
+      },
+    },
+    artifacts: { stores: [{ id: "known-store", provider: "local" }] },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("ghost-store")),
+    `Expected artifact store_ref error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationAS2LlmMapUnknownBackend() {
+  const adp = {
+    ..._minimalManifest,
+    interop: {
+      agentspec: {
+        llm_map: [{ backend_id: "ghost-backend", agentspec_id: "3a5bf0c0-9f28-47d8-a000-111111111111" }],
+      },
+    },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("ghost-backend")),
+    `Expected AS-2 llm_map error, got: ${errors.join("; ")}`
+  );
+}
+
+function testValidationAS3RefPathTraversal() {
+  const adp = {
+    ..._minimalManifest,
+    interop: {
+      agentspec: {
+        ref: "../../etc/passwd",
+      },
+    },
+  } as any;
+  const errors = validateAdpSemantics(adp);
+  assert.ok(
+    errors.some((e: string) => e.includes("path traversal") && e.includes("../../etc/passwd")),
+    `Expected AS-3 ref path traversal error, got: ${errors.join("; ")}`
+  );
+}
+
 function testCompositionMemUriNoPath() {
   // Base URI is "mem://nopath" (no path component) → schemeMatch[2] = "" → basePath = "/" (line 224-225)
   // "mem://nopath" → _resolveUri("base", "mem://nopath")
@@ -2132,6 +2888,58 @@ evaluation:${_VALID_EVAL_YAML}
   // Validation error branches
   testValidateConformanceClassFullWithEmptyEval();
   testValidateSemanticsJudgesDeprecationWarning();
+  // Workspace validation checks (v0.3.0)
+  testValidationWorkspaceMissingRoot();
+  testValidationWorkspaceBothRoots();
+  testValidationWorkspaceGitAutoCommitRequiresEnabled();
+  testValidationWorkspaceMountDotDotTarget();
+  testValidationWorkspaceMountNoTarget();
+  // Observability and interop checks
+  testValidationObservabilityInvalidTraceEvent();
+  testValidationObservabilityUnknownCostModelRef();
+  testValidationAS1NodeMapUnknownKey();
+  testValidationAS2LlmMapUnknownBackend();
+  testValidationAS3RefPathTraversal();
+  testValidationWorkspaceWritePathEscape();
+  testValidationWorkspaceDuplicateMountId();
+  testValidationSandboxMissingTimeout();
+  testValidationSandboxNoPolicyNoId();
+  testValidationSandboxWithTimeoutMs();
+  testValidationSandboxMountWorkspaceWithoutDeclaration();
+  testValidationSandboxSnapshotCustomProviderWarning();
+  testValidationArtifactsDuplicateStore();
+  testValidationArtifactNodeStoreRefUnknown();
+  // Guardrail v0.3.0 interrupt/cost checks
+  testValidationGuardrailInterruptPauseAndNotifyWithExecutionMode();
+  testValidationGuardrailInterruptNoIdPauseAndNotify();
+  testValidationGuardrailCostInterruptRefUnknown();
+  testValidationGuardrailCostDowngradeMissingRef();
+  testValidationGuardrailCostDowngradeRefUnknownModel();
+  testValidationGuardrailInterruptToolRefUnknown();
+  // Loop node checks (15, 15b, 16)
+  testValidationLoopNoBodyNodesNoId();
+  testValidationLoopBodyNodeInnerLoopNoBodyNodes();
+  testValidationLoopBodyNodeUnknownRef();
+  testValidationLoopBodyNodesConnected();
+  testValidationLoopBodyNodesNoEdge();
+  testValidationLoopSelfReference();
+  testValidationLoopCircularReference();
+  // Tools policy checks (17, 29)
+  testValidationToolCacheKeyFieldsBadNotation();
+  testValidationToolCacheKeyFieldsBadNotationNoId();
+  testValidationToolOnDemandMissingDescription();
+  testValidationToolOnDemandNoDescriptionProperty();
+  testValidationToolOnDemandNonEmptyDescription();
+  // Memory v0.3.0 checks
+  testValidationMemoryDuplicateStoreId();
+  testValidationMemoryOperationUnknownStoreRef();
+  testValidationMemoryContextAssemblyOrderUnknownStoreRef();
+  testValidationMemoryWorkingSummaryModelRefUnknown();
+  testValidationMemoryWorkingSummaryMissingRef();
+  testValidationMemoryWorkingCompactionExceedsMax();
+  testValidationMemoryStaticInjectionBadPath();
+  testValidationMemoryStaticInjectionNoWorkspace();
+  testValidationMemoryStaticInjectionNoPathProperty();
   // New composition coverage: op default, null intermediate, mem:// host URI
   testCompositionOverrideDefaultOp();
   testCompositionDeleteWithNullIntermediate();

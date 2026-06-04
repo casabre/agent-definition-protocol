@@ -1,0 +1,33 @@
+adp_version: "0.3.0"
+id: "test-memory-op-store-ref"
+runtime:
+  execution:
+    - id: "primary"
+      backend: "python"
+      entrypoint: "main.py"
+  models:
+    - id: "primary"
+      provider: "openai"
+      model: "gpt-4o"
+flow:
+  id: "main"
+  graph:
+    nodes:
+      - id: "input"
+        kind: "input"
+      - id: "output"
+        kind: "output"
+    edges: []
+    start_nodes: ["input"]
+    end_nodes: ["output"]
+evaluation: {}
+memory:
+  stores:
+    - id: "knowledge"
+      type: "semantic"
+      provider: "qdrant"
+      endpoint: "http://localhost:6333"
+  operations:
+    - on_event: "on_invoke_end"
+      op: "write"
+      store_ref: "nonexistent-store"  # Check 19: references unknown store
