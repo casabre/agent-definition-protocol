@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="ADP — The OpenAPI for AI Agents. One YAML manifest declares your agent's runtime, flow graph, evaluation criteria, and packaging metadata. Declare once, run anywhere.">
+  <meta name="description" content="ADP — The open specification for AI agents. One YAML manifest declares runtime, flow graph, evaluation, and compliance. Framework-neutral. Apache 2.0.">
   <meta property="og:title" content="ADP — Agent Definition Protocol">
-  <meta property="og:description" content="The OpenAPI for AI Agents. Declare once, run anywhere.">
+  <meta property="og:description" content="ADP — The open specification for AI agents. One YAML manifest declares runtime, flow graph, evaluation, and compliance. Framework-neutral. Apache 2.0.">
   <title>ADP — Agent Definition Protocol</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -840,6 +840,79 @@
     @media (max-width: 500px) {
       .fw-grid { grid-template-columns: 1fr; }
     }
+
+    /* ─── Tertiary CTA (hero) ────────────────────────────── */
+    .btn-tertiary {
+      width: 100%;
+      text-align: center;
+      font-size: 0.79rem;
+      color: var(--muted);
+      text-decoration: none;
+      border-bottom: 1px solid rgba(100,116,139,0.3);
+      padding-bottom: 1px;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .btn-tertiary:hover { color: var(--sky); border-color: rgba(56,189,248,0.4); }
+
+    /* ─── What's included ───────────────────────────────────── */
+    .whats-included {
+      margin: 3rem auto 0;
+      max-width: 680px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      background: rgba(255,255,255,0.02);
+      text-align: left;
+    }
+    .wi-header {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.4rem 0.75rem;
+      margin-bottom: 1rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .wi-label-tag {
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--sky);
+    }
+    .wi-version-tag {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--muted);
+    }
+    .wi-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.75rem 2rem;
+    }
+    .wi-item { display: flex; flex-direction: column; gap: 0.1rem; }
+    .wi-num  { font-size: 0.82rem; font-weight: 700; color: var(--text); }
+    .wi-desc { font-size: 0.74rem; color: var(--muted); line-height: 1.45; }
+    @media (max-width: 500px) { .wi-grid { grid-template-columns: 1fr; } }
+
+    /* ─── Ecosystem caption ─────────────────────────────────── */
+    .eco-caption {
+      text-align: center;
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-top: 1.25rem;
+      font-style: italic;
+    }
+
+    /* ─── Compliance lead sentence ──────────────────────────── */
+    .compliance-lead {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--amber);
+      margin-top: 0.5rem;
+      margin-bottom: 0.75rem;
+      line-height: 1.5;
+    }
   </style>
 </head>
 <body>
@@ -870,11 +943,6 @@
   <div class="hero-glow" aria-hidden="true"></div>
   <div class="hero-grid"  aria-hidden="true"></div>
   <div class="hero-content">
-    <div class="badge">
-      <span class="badge-dot" aria-hidden="true"></span>
-      v0.3.0 · Open Specification
-    </div>
-
     <img class="hero-logo" src="logo.png" alt="ADP — Agent Definition Protocol logo">
 
     <h1>The OpenAPI<br>for AI Agents</h1>
@@ -888,6 +956,7 @@
     <div class="hero-actions">
       <a class="btn-primary" href="#start">Get started →</a>
       <a class="btn-outline" href="https://github.com/casabre/agent-definition-protocol/tree/main/spec" target="_blank" rel="noopener">Read the spec</a>
+      <a class="btn-tertiary" href="https://github.com/casabre/agent-definition-protocol/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Framework or platform maintainer? Add ADP support →</a>
     </div>
 
     <div class="code-window">
@@ -914,16 +983,29 @@
         <span class="d">-</span> <span class="br">{</span> <span class="k">type</span>: <span class="s">"llm_judge"</span>, <span class="k">threshold</span>: <span class="n">0.85</span> <span class="br">}</span></pre>
     </div>
 
-    <div class="stats-strip">
-      <span class="stat"><strong>v0.3.0</strong> current release</span>
-      <span class="stat">·</span>
-      <span class="stat"><strong>4</strong> SDKs</span>
-      <span class="stat">·</span>
-      <span class="stat"><strong>4</strong> framework mappings</span>
-      <span class="stat">·</span>
-      <span class="stat"><strong>8</strong> conformance scenarios</span>
-      <span class="stat">·</span>
-      <span class="stat"><strong>6</strong> JSON Schemas</span>
+    <div class="whats-included">
+      <div class="wi-header">
+        <span class="wi-label-tag">What's included</span>
+        <span class="wi-version-tag">v0.3.0 · Stable spec · semver-versioned releases</span>
+      </div>
+      <div class="wi-grid">
+        <div class="wi-item">
+          <span class="wi-num">4 SDKs</span>
+          <span class="wi-desc">Python, TypeScript, Rust, Go</span>
+        </div>
+        <div class="wi-item">
+          <span class="wi-num">8 conformance scenarios</span>
+          <span class="wi-desc">CI-ready out of the box</span>
+        </div>
+        <div class="wi-item">
+          <span class="wi-num">6 JSON Schemas</span>
+          <span class="wi-desc">Hosted on GitHub Pages, validate anywhere</span>
+        </div>
+        <div class="wi-item">
+          <span class="wi-num">4 framework guides</span>
+          <span class="wi-desc">LangGraph, AutoGen, CrewAI, Semantic Kernel</span>
+        </div>
+      </div>
     </div>
   </div>
 </section>
@@ -1102,6 +1184,7 @@
         <div class="eco-box-sub">MCP · A2A<br>OTel · OCI</div>
       </div>
     </div>
+    <p class="eco-caption">ADP is the manifest layer — not another runtime or framework.</p>
   </div>
 </section>
 
@@ -1114,6 +1197,7 @@
       <div>
         <span class="label">Governance &amp; Auditability</span>
         <h2>Built for the<br>regulated era of AI</h2>
+        <p class="compliance-lead">AI regulation is arriving — ADP makes compliance structural before it becomes mandatory.</p>
         <p class="sub">
           AI regulation is arriving fast. The EU AI Act mandates automatic logging,
           technical documentation, and human oversight for high-risk systems — effective 2026.
@@ -1334,7 +1418,7 @@
 
     <div class="cta-box">
       <h2>Ready to standardize your agents?</h2>
-      <p>ADP is open, specification-driven, and framework-neutral.<br>Submissions to the Agentic AI Foundation in progress. Contributions welcome.</p>
+      <p>ADP is open, specification-driven, and framework-neutral.<br>Standardization in progress. Contributions welcome.</p>
       <div class="cta-actions">
         <a class="btn-primary" href="https://github.com/casabre/agent-definition-protocol" target="_blank" rel="noopener">View on GitHub →</a>
         <a class="btn-outline" href="https://github.com/casabre/agent-definition-protocol/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">How to contribute</a>
