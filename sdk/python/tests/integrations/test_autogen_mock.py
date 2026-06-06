@@ -66,8 +66,6 @@ def test_build_autogen_raises_when_not_available(monkeypatch):
     """build_autogen_from_adp raises ImportError when _AVAILABLE is False."""
     import adp_sdk.integrations.autogen as _mod
     monkeypatch.setattr(_mod, "_AVAILABLE", False)
-    # Temporarily unpatch the pragma: no cover guard by calling directly
-    import importlib
     import pytest
     with pytest.raises(ImportError, match="autogen_agentchat"):
         _mod.build_autogen_from_adp(SIMPLE_MANIFEST)
@@ -75,8 +73,6 @@ def test_build_autogen_raises_when_not_available(monkeypatch):
 
 def test_build_autogen_with_backend_factory_when_available(monkeypatch):
     """build_autogen_from_adp uses backend_factory when autogen is available."""
-    import adp_sdk.integrations.autogen as _mod
-
     if not _AVAILABLE:
         import pytest
         pytest.skip("autogen_agentchat not installed; skipping real-mode test")
@@ -134,7 +130,6 @@ def test_import_failure_path_sets_available_false():
     that cannot be reached in a normal run because the package is installed.
     """
     import sys
-    import importlib
 
     module_key = "adp_sdk.integrations.autogen"
 

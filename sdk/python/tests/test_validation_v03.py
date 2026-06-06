@@ -3,7 +3,6 @@
 Each test exercises a specific branch/error in validate_adp_semantics.
 Uses inline ADP construction (no fixture files) for maximum control.
 """
-import pytest
 import yaml as _yaml
 from adp_sdk.adp_model import ADP
 from adp_sdk.validation import validate_adp, validate_adp_semantics
