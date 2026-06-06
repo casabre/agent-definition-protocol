@@ -1232,12 +1232,76 @@ import:
         let _result = resolve_adp("main", Some(make_resolver(files)));
     }
 
+    // covers apply_override delete: navigate_mut returns None (missing parent segment → line 299 None-branch)
+    #[test]
+    fn test_override_delete_missing_parent_is_noop() {
+        let data = serde_json::json!({"a": 1});
+        let result = apply_override(data, "/nonexistent/key", "delete", None);
+        assert!(result.is_ok(), "delete with missing parent should be a no-op: {:?}", result);
+    }
+
     // covers apply_override delete: target node is not an Object (line 224 false branch)
     #[test]
     fn test_override_delete_on_array_node_is_noop() {
         let data = serde_json::json!({"items": ["a", "b"]});
         let result = apply_override(data, "/items/1", "delete", None);
         assert!(result.is_ok());
+    }
+
+    // covers deep_merge recursive call (lines 155-157): both base and overlay have same key as Object
+    #[test]
+    fn test_deep_merge_nested_objects_recurse() {
+        let base = serde_json::json!({"outer": {"a": 1, "b": 2}});
+        let overlay = serde_json::json!({"outer": {"b": 99, "c": 3}});
+        let result = deep_merge(base, overlay);
+        assert_eq!(result["outer"]["a"], 1, "unpatched key must be kept");
+        assert_eq!(result["outer"]["b"], 99, "patched key must be updated");
+        assert_eq!(result["outer"]["c"], 3, "new key must be added via recursion");
+    }
+
+    // covers apply_patch `(_, patch) => patch` arm (line 204): patch is not an Object
+    #[test]
+    fn test_apply_patch_non_object_patch_wins() {
+        let base = serde_json::json!({"a": 1});
+        let result = apply_patch(base, serde_json::json!("scalar-wins"));
+        assert_eq!(result, serde_json::json!("scalar-wins"));
+    }
+
+    // covers id_keyed_merge `None => result.push(patch_item)` (line 231): integer "id" field fails as_str()
+    #[test]
+    fn test_id_keyed_merge_non_string_id_appends() {
+        let base_list = vec![serde_json::json!({"id": "existing", "val": "original"})];
+        let patch_list = vec![serde_json::json!({"id": 42, "val": "int-id"})];
+        let result = id_keyed_merge(base_list, patch_list);
+        let arr = result.as_array().unwrap();
+        assert_eq!(arr.len(), 2, "item with non-string id must be appended");
+        assert_eq!(arr[0]["id"], "existing");
+        assert_eq!(arr[1]["id"], 42);
+    }
+
+    // covers resolve_adp lines 44 (errors.push) and 51 (Err(errors)): validate_adp returns Err
+    // for a manifest that deserializes successfully but has empty execution[]
+    #[test]
+    fn test_resolve_adp_validate_adp_error_path() {
+        let mut files: HashMap<String, String> = HashMap::new();
+        let yaml = r#"adp_version: "0.1.0"
+id: "val-err-test"
+runtime:
+  execution: []
+flow:
+  id: "val-err.flow"
+  graph:
+    nodes: []
+    edges: []
+evaluation: {}
+"#
+        .to_string();
+        files.insert("val-err-test".to_string(), yaml);
+        let result = resolve_adp("val-err-test", Some(make_resolver(files)));
+        assert!(result.is_err(), "empty execution should fail validate_adp");
+        let errors = result.unwrap_err();
+        let combined = errors.join(" ");
+        assert!(combined.contains("execution"), "expected execution error, got: {combined}");
     }
 
     // covers apply_override set: parent node is scalar → _ arm (line 247)
