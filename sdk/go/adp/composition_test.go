@@ -2067,3 +2067,81 @@ overrides:
 		t.Errorf("expected 'http/protobuf', got %q", adp.Telemetry.Protocol)
 	}
 }
+
+// TestDeepMergeNullDeletesKeyDirect directly calls deepMerge with a nil overlay
+// value to cover the delete(result, k) branch (the pipeline-level test routes
+// null through applyPatch instead, so deepMerge's own nil branch stays uncovered).
+func TestDeepMergeNullDeletesKeyDirect(t *testing.T) {
+	base := map[string]interface{}{"keep": "yes", "remove": "this"}
+	overlay := map[string]interface{}{"remove": nil}
+	result := deepMerge(base, overlay)
+	if _, ok := result["remove"]; ok {
+		t.Error("expected 'remove' to be deleted by deepMerge")
+	}
+	if result["keep"] != "yes" {
+		t.Errorf("'keep' should be preserved, got %v", result["keep"])
+	}
+}
+
+// TestDeepMergeOverlayMapBaseScalar covers the branch where overlay has a map
+// for a key whose base value is a scalar (overlay map wins, no recursion).
+func TestDeepMergeOverlayMapBaseScalar(t *testing.T) {
+	base := map[string]interface{}{"k": "scalar"}
+	overlay := map[string]interface{}{"k": map[string]interface{}{"nested": "val"}}
+	result := deepMerge(base, overlay)
+	m, ok := result["k"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected map, got %T", result["k"])
+	}
+	if m["nested"] != "val" {
+		t.Errorf("expected nested='val', got %v", m["nested"])
+	}
+}
+
+// TestAllHaveIDNonMapItem covers the branch where a list item is not a map.
+func TestAllHaveIDNonMapItem(t *testing.T) {
+	list := []interface{}{"not-a-map"}
+	if allHaveID(list) {
+		t.Error("expected false for list with non-map item")
+	}
+}
+
+// TestAllHaveIDEmptyList covers the empty-list fast-return false branch.
+func TestAllHaveIDEmptyList(t *testing.T) {
+	if allHaveID([]interface{}{}) {
+		t.Error("expected false for empty list")
+	}
+}
+
+// TestAllHaveIDMapWithoutID covers the branch where an item is a map but has no "id" key.
+func TestAllHaveIDMapWithoutID(t *testing.T) {
+	list := []interface{}{map[string]interface{}{"name": "no-id-field"}}
+	if allHaveID(list) {
+		t.Error("expected false for map without id field")
+	}
+}
+
+// TestIdKeyedMergeNonMapPatchItem covers the defensive branch where a patch item
+// is not a map (appended as-is).
+func TestIdKeyedMergeNonMapPatchItem(t *testing.T) {
+	base := []interface{}{map[string]interface{}{"id": "x", "v": 1}}
+	patch := []interface{}{"raw-string"}
+	result := idKeyedMerge(base, patch)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(result))
+	}
+	if result[1] != "raw-string" {
+		t.Errorf("expected raw-string appended, got %v", result[1])
+	}
+}
+
+// TestIdKeyedMergeMapWithoutStringID covers the branch where a patch map has no
+// string "id" field (item is appended).
+func TestIdKeyedMergeMapWithoutStringID(t *testing.T) {
+	base := []interface{}{map[string]interface{}{"id": "x", "v": 1}}
+	patch := []interface{}{map[string]interface{}{"name": "no-id"}}
+	result := idKeyedMerge(base, patch)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(result))
+	}
+}
