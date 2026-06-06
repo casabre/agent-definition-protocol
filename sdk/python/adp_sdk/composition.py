@@ -111,7 +111,7 @@ def _id_keyed_merge(base_list: list, patch_list: list) -> list:
                 )
             else:
                 result.append(copy.deepcopy(patch_item))
-        else:
+        else:  # pragma: no cover
             result.append(copy.deepcopy(patch_item))
     return result
 

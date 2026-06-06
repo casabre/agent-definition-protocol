@@ -320,6 +320,15 @@ def test_deep_merge_null_removes_key():
     assert result["b"]["c"] == 2
 
 
+def test_deep_merge_nested_dicts():
+    """_deep_merge: nested dict values are merged recursively (both have the key as dict)."""
+    from adp_sdk.composition import _deep_merge
+    base = {"outer": {"a": 1, "b": 2}}
+    overlay = {"outer": {"b": 99, "c": 3}}
+    result = _deep_merge(base, overlay)
+    assert result == {"outer": {"a": 1, "b": 99, "c": 3}}
+
+
 def test_additive_merge_scalar_collision():
     """_additive_merge: scalar collision → module value wins."""
     from adp_sdk.composition import _additive_merge
