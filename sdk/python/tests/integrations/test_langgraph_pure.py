@@ -200,3 +200,38 @@ def test_resolve_callable_tool_ref_not_found_raises():
     node = {"id": "n", "kind": "tool", "tool_ref": "nonexistent"}
     with pytest.raises(ValueError, match="not found in tools"):
         resolve_callable(node, {}, None, {})
+
+
+# ---------------------------------------------------------------------------
+# Import-failure path (exercises the except ImportError branch at module level)
+# ---------------------------------------------------------------------------
+
+def test_import_failure_path_sets_available_false():
+    """Reloading langgraph module with langgraph blocked sets _AVAILABLE=False.
+
+    This exercises lines 17-20 of langgraph.py (the except ImportError block)
+    that cannot be reached during normal testing because langgraph IS installed.
+    """
+    import sys
+
+    module_key = "adp_sdk.integrations.langgraph"
+
+    # Save and evict the module
+    saved_module = sys.modules.pop(module_key, None)
+    # Block langgraph submodules
+    blocked_keys = [k for k in sys.modules if k.startswith("langgraph")]
+    saved_blocked = {k: sys.modules.pop(k) for k in blocked_keys}
+    sys.modules["langgraph"] = None  # type: ignore[assignment]
+
+    try:
+        import adp_sdk.integrations.langgraph as _reloaded
+        assert _reloaded._AVAILABLE is False
+        assert _reloaded.END is None
+        assert _reloaded.StateGraph is None
+    finally:
+        del sys.modules[module_key]
+        del sys.modules["langgraph"]
+        for k, v in saved_blocked.items():
+            sys.modules[k] = v
+        if saved_module is not None:
+            sys.modules[module_key] = saved_module

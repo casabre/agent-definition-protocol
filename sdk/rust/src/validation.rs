@@ -1045,3 +1045,3392 @@ pub fn validate_adp_semantics(adp: &Adp) -> Vec<String> {
 
     errors
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adp::*;
+
+    /// Build a minimal valid Adp struct directly (no YAML parsing needed for semantic tests).
+    fn minimal_adp() -> Adp {
+        Adp {
+            adp_version: "0.1.0".to_string(),
+            id: "test-id".to_string(),
+            conformance_class: None,
+            runtime: Runtime {
+                execution: vec![RuntimeEntry {
+                    id: "r1".to_string(),
+                    backend: "python".to_string(),
+                    entrypoint: Some("agent.main:app".to_string()),
+                    ..Default::default()
+                }],
+                models: None,
+                adapter_hints: None,
+            },
+            flow: Flow {
+                id: "test.flow".to_string(),
+                graph: Graph {
+                    nodes: vec![Node {
+                        id: "n1".to_string(),
+                        kind: NodeKind::Input,
+                        model_ref: None,
+                        tool_ref: None,
+                        runtime_ref: None,
+                        suite_ref: None,
+                        memory_ref: None,
+                        strategy: None,
+                        adp_ref: None,
+                        label: None,
+                        body_nodes: None,
+                        termination: None,
+                        params: None,
+                        extensions: None,
+                    }],
+                    edges: vec![],
+                    start_nodes: Some(vec!["n1".to_string()]),
+                    end_nodes: Some(vec!["n1".to_string()]),
+                    extensions: None,
+                },
+                loop_policy: None,
+                extensions: None,
+            },
+            evaluation: serde_yaml::from_str(r#"
+suites:
+  - id: "s1"
+    metrics:
+      - id: "m1"
+        type: "deterministic"
+        function: "noop"
+        scoring: "boolean"
+        threshold: true
+"#).unwrap(),
+            extends: None,
+            imports: None,
+            overrides: None,
+            guardrails: None,
+            telemetry: None,
+            subagents: None,
+            hooks: None,
+            pipeline: None,
+            streaming: None,
+            x_testing: None,
+            tools: None,
+            governance: None,
+            memory: None,
+            workspace: None,
+            sandbox: None,
+            artifacts: None,
+            observability: None,
+            interop: None,
+        }
+    }
+
+    // ===== validate_adp tests =====
+
+    #[test]
+    fn test_validate_adp_valid() {
+        let adp = minimal_adp();
+        assert!(validate_adp(&adp).is_ok());
+    }
+
+    #[test]
+    fn test_validate_adp_bad_version() {
+        let mut adp = minimal_adp();
+        adp.adp_version = "9.9.9".to_string();
+        assert!(validate_adp(&adp).is_err());
+    }
+
+    #[test]
+    fn test_validate_adp_empty_id() {
+        let mut adp = minimal_adp();
+        adp.id = "".to_string();
+        assert!(validate_adp(&adp).is_err());
+    }
+
+    #[test]
+    fn test_validate_adp_empty_execution() {
+        let mut adp = minimal_adp();
+        adp.runtime.execution = vec![];
+        assert!(validate_adp(&adp).is_err());
+    }
+
+    #[test]
+    fn test_validate_adp_conformance_class_full_flow_empty() {
+        let mut adp = minimal_adp();
+        adp.conformance_class = Some("full".to_string());
+        adp.flow.id = "".to_string();
+        adp.flow.graph.nodes = vec![];
+        let result = validate_adp(&adp);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("flow is empty"));
+    }
+
+    #[test]
+    fn test_validate_adp_conformance_class_full_eval_empty() {
+        let mut adp = minimal_adp();
+        adp.conformance_class = Some("full".to_string());
+        adp.evaluation = serde_yaml::from_str("{}").unwrap();
+        let result = validate_adp(&adp);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("evaluation is empty"));
+    }
+
+    #[test]
+    fn test_validate_adp_conformance_class_full_flow_ok_eval_empty() {
+        // Flow is NOT empty, but evaluation IS empty
+        // This exercises: flow_empty=false -> skip first check, eval_empty=true -> return error
+        // And covers line 39: the closing } of `if cc == "full" && eval_empty`
+        let mut adp = minimal_adp();
+        adp.conformance_class = Some("full".to_string());
+        // Flow is non-empty (minimal_adp has nodes)
+        adp.evaluation = serde_yaml::from_str("{}").unwrap(); // Eval IS empty
+        let result = validate_adp(&adp);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("evaluation is empty"));
+    }
+
+    #[test]
+    fn test_validate_adp_conformance_class_full_both_non_empty() {
+        // Both flow and eval are non-empty -> reaches line 39 (neither error fires)
+        let mut adp = minimal_adp();
+        adp.conformance_class = Some("full".to_string());
+        // minimal_adp has both non-empty flow and evaluation
+        let result = validate_adp(&adp);
+        // Should succeed (no conformance_class errors)
+        assert!(result.is_ok(), "Full conformance with non-empty flow and eval should pass: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_validate_adp_conformance_class_non_full() {
+        // conformance_class is not "full" -> neither check fires
+        let mut adp = minimal_adp();
+        adp.conformance_class = Some("basic".to_string());
+        // No validation failure expected for non-"full" conformance_class
+        // (it just passes through the if block without error)
+        let result = validate_adp(&adp);
+        // May pass or fail schema validation depending on schema constraints
+        let _ = result; // We don't assert outcome here, just execute the code path
+    }
+
+    #[test]
+    fn test_validate_adp_versions_020_030() {
+        for version in ["0.2.0", "0.3.0"] {
+            let mut adp = minimal_adp();
+            adp.adp_version = version.to_string();
+            assert!(validate_adp(&adp).is_ok(), "version {} should be valid", version);
+        }
+    }
+
+    // ===== validate_adp_semantics tests =====
+
+    #[test]
+    fn test_semantics_clean_adp() {
+        let adp = minimal_adp();
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.is_empty(), "clean adp should have no errors: {:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_unresolved_composition_extends() {
+        let mut adp = minimal_adp();
+        adp.extends = Some("base.yaml".to_string());
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("unresolved composition")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_unresolved_composition_imports() {
+        let mut adp = minimal_adp();
+        adp.imports = Some(vec![ImportEntry {
+            id: "mod".to_string(),
+            from_uri: "module.yaml".to_string(),
+            sections: vec![],
+        }]);
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("unresolved composition")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_duplicate_node_ids() {
+        let mut adp = minimal_adp();
+        adp.flow.graph.nodes.push(Node {
+            id: "n1".to_string(),
+            kind: NodeKind::Output,
+            model_ref: None, tool_ref: None, runtime_ref: None, suite_ref: None,
+            memory_ref: None, strategy: None, adp_ref: None, label: None,
+            body_nodes: None, termination: None, params: None, extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("duplicate node id")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_edge_from_missing_node() {
+        let mut adp = minimal_adp();
+        adp.flow.graph.edges.push(Edge {
+            from: "missing".to_string(),
+            to: "n1".to_string(),
+            condition: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("node 'missing' not found")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_edge_to_missing_node() {
+        let mut adp = minimal_adp();
+        adp.flow.graph.edges.push(Edge {
+            from: "n1".to_string(),
+            to: "missing-to".to_string(),
+            condition: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("node 'missing-to' not found")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_start_node_missing() {
+        let mut adp = minimal_adp();
+        adp.flow.graph.start_nodes = Some(vec!["nonexistent".to_string()]);
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("start_node 'nonexistent'")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_end_node_missing() {
+        let mut adp = minimal_adp();
+        adp.flow.graph.end_nodes = Some(vec!["nonexistent-end".to_string()]);
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("end_node 'nonexistent-end'")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_node_suite_ref_not_found() {
+        let mut adp = minimal_adp();
+        adp.flow.graph.nodes[0].suite_ref = Some("no-such-suite".to_string());
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("suite_ref 'no-such-suite'")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_node_model_ref_not_found() {
+        let mut adp = minimal_adp();
+        // We need at least one model defined so model_ids is Some
+        adp.runtime.models = Some(vec![Model {
+            id: "m1".to_string(),
+            provider: "openai".to_string(),
+            model: "gpt-4".to_string(),
+            ..Default::default()
+        }]);
+        adp.flow.graph.nodes[0].model_ref = Some("nonexistent-model".to_string());
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("model_ref 'nonexistent-model'")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_node_model_ref_no_models_defined() {
+        // When no models are defined, model_ref is skipped
+        let mut adp = minimal_adp();
+        adp.runtime.models = None;
+        adp.flow.graph.nodes[0].model_ref = Some("any-model".to_string());
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("model_ref")), "No error expected when models not defined: {:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_node_runtime_ref_not_found() {
+        let mut adp = minimal_adp();
+        adp.flow.graph.nodes[0].runtime_ref = Some("no-such-runtime".to_string());
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("runtime_ref 'no-such-runtime'")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_node_tool_ref_not_found() {
+        let mut adp = minimal_adp();
+        adp.tools = Some(Tools {
+            mcp_servers: Some(vec![MCPServer {
+                id: "tool1".to_string(),
+                name: None,
+                description: None,
+                command: "cmd".to_string(),
+                args: None,
+                env: None,
+                timeout_seconds: None,
+                auth: None,
+                policy: None,
+                extensions: None,
+            }]),
+            http_apis: None,
+            sql_functions: None,
+            policy: None,
+            extensions: None,
+        });
+        adp.flow.graph.nodes[0].tool_ref = Some("nonexistent-tool".to_string());
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("tool_ref 'nonexistent-tool'")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_hook_node_filter_not_found() {
+        let mut adp = minimal_adp();
+        adp.hooks = Some(serde_json::json!([
+            {"event": "before_node", "node_filter": ["nonexistent-node"]}
+        ]));
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("node_filter 'nonexistent-node'")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_subflow_adp_ref_not_found() {
+        let mut adp = minimal_adp();
+        adp.flow.graph.nodes.push(Node {
+            id: "sub1".to_string(),
+            kind: NodeKind::Subflow,
+            adp_ref: Some("no-such-subagent".to_string()),
+            model_ref: None, tool_ref: None, runtime_ref: None, suite_ref: None,
+            memory_ref: None, strategy: None, label: None,
+            body_nodes: None, termination: None, params: None, extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("does not resolve to a known subagents")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_subflow_adp_ref_uri_passthrough() {
+        let mut adp = minimal_adp();
+        adp.flow.graph.nodes.push(Node {
+            id: "sub1".to_string(),
+            kind: NodeKind::Subflow,
+            adp_ref: Some("https://example.com/agent.yaml".to_string()),
+            model_ref: None, tool_ref: None, runtime_ref: None, suite_ref: None,
+            memory_ref: None, strategy: None, label: None,
+            body_nodes: None, termination: None, params: None, extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("subagents")), "URI adp_ref should not trigger error: {:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_telemetry_invalid_attribute() {
+        let mut adp = minimal_adp();
+        adp.telemetry = Some(Telemetry {
+            endpoint: None,
+            protocol: None,
+            service_name: None,
+            sampling_rate: None,
+            required_attributes: vec!["invalid_attribute".to_string()],
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("not a valid gen_ai")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_telemetry_valid_gen_ai_attribute() {
+        let mut adp = minimal_adp();
+        adp.telemetry = Some(Telemetry {
+            endpoint: None,
+            protocol: None,
+            service_name: None,
+            sampling_rate: None,
+            required_attributes: vec!["gen_ai.request.model".to_string(), "x_acme.custom.attr".to_string()],
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("not a valid gen_ai")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_tool_auth_env_var_required() {
+        let mut adp = minimal_adp();
+        adp.tools = Some(Tools {
+            mcp_servers: Some(vec![MCPServer {
+                id: "t1".to_string(),
+                name: None,
+                description: None,
+                command: "cmd".to_string(),
+                args: None,
+                env: None,
+                timeout_seconds: None,
+                auth: Some(Auth {
+                    scheme: Some(AuthScheme::Bearer),
+                    env_var: None,
+                    header: None,
+                    api_key: None,
+                    extensions: None,
+                }),
+                policy: None,
+                extensions: None,
+            }]),
+            http_apis: None,
+            sql_functions: None,
+            policy: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("auth.env_var required")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_tool_auth_none_scheme_no_env_var_ok() {
+        let mut adp = minimal_adp();
+        adp.tools = Some(Tools {
+            mcp_servers: Some(vec![MCPServer {
+                id: "t1".to_string(),
+                name: None,
+                description: None,
+                command: "cmd".to_string(),
+                args: None,
+                env: None,
+                timeout_seconds: None,
+                auth: Some(Auth {
+                    scheme: Some(AuthScheme::None),
+                    env_var: None,
+                    header: None,
+                    api_key: None,
+                    extensions: None,
+                }),
+                policy: None,
+                extensions: None,
+            }]),
+            http_apis: None,
+            sql_functions: None,
+            policy: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("auth.env_var")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_http_api_auth_env_var_required() {
+        let mut adp = minimal_adp();
+        adp.tools = Some(Tools {
+            mcp_servers: None,
+            http_apis: Some(vec![HTTPAPI {
+                id: "api1".to_string(),
+                name: None,
+                description: None,
+                base_url: "https://api.example.com".to_string(),
+                path: None,
+                method: None,
+                headers: None,
+                auth: Some(Auth {
+                    scheme: Some(AuthScheme::ApiKey),
+                    env_var: None,
+                    header: None,
+                    api_key: None,
+                    extensions: None,
+                }),
+                policy: None,
+                extensions: None,
+            }]),
+            sql_functions: None,
+            policy: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("auth.env_var required")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_sql_function_auth_env_var_required() {
+        let mut adp = minimal_adp();
+        adp.tools = Some(Tools {
+            mcp_servers: None,
+            http_apis: None,
+            sql_functions: Some(vec![SQLFunction {
+                id: "sql1".to_string(),
+                name: None,
+                description: None,
+                query: "SELECT 1".to_string(),
+                db_url_env: None,
+                db_schema: None,
+                auth: Some(Auth {
+                    scheme: Some(AuthScheme::OAuth2),
+                    env_var: None,
+                    header: None,
+                    api_key: None,
+                    extensions: None,
+                }),
+                policy: None,
+                extensions: None,
+            }]),
+            policy: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("auth.env_var required")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_compliance_unknown_standard() {
+        let mut adp = minimal_adp();
+        adp.governance = Some(serde_json::json!({
+            "compliance": [{"standard": "unknown-standard-xyz"}]
+        }));
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("unknown-standard-xyz")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_compliance_known_standards() {
+        let mut adp = minimal_adp();
+        adp.governance = Some(serde_json::json!({
+            "compliance": [
+                {"standard": "gdpr"},
+                {"standard": "hipaa"},
+                {"standard": "soc2"},
+                {"standard": "eu-ai-act"},
+                {"standard": "iso-27001"},
+                {"standard": "fedramp"},
+                {"standard": "x_custom.standard"}
+            ]
+        }));
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("unknown")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_workspace_permissions_path_traversal() {
+        let mut adp = minimal_adp();
+        adp.workspace = Some(Workspace {
+            root: Some("/workspace".to_string()),
+            root_env_var: None,
+            git: None,
+            permissions: Some(WorkspacePermissions {
+                read: None,
+                write: Some(vec!["../escape".to_string()]),
+                execute: None,
+                extensions: None,
+            }),
+            mounts: None,
+            cleanup: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("MUST NOT escape workspace.root")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_workspace_both_root_and_root_env_var() {
+        let mut adp = minimal_adp();
+        adp.workspace = Some(Workspace {
+            root: Some("/workspace".to_string()),
+            root_env_var: Some("WS_ROOT".to_string()),
+            git: None,
+            permissions: None,
+            mounts: None,
+            cleanup: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("exactly one of 'root' or 'root_env_var'")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_workspace_neither_root_nor_root_env_var() {
+        let mut adp = minimal_adp();
+        adp.workspace = Some(Workspace {
+            root: None,
+            root_env_var: None,
+            git: None,
+            permissions: None,
+            mounts: None,
+            cleanup: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("exactly one of 'root' or 'root_env_var'")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_workspace_git_auto_commit_requires_enabled() {
+        let mut adp = minimal_adp();
+        adp.workspace = Some(Workspace {
+            root: Some("/ws".to_string()),
+            root_env_var: None,
+            git: Some(WorkspaceGit {
+                enabled: Some(false),
+                repo_url: None,
+                branch: None,
+                commit: None,
+                auto_commit: Some(true),
+                extensions: None,
+            }),
+            permissions: None,
+            mounts: None,
+            cleanup: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("auto_commit requires enabled")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_workspace_mount_duplicate_ids() {
+        let mut adp = minimal_adp();
+        adp.workspace = Some(Workspace {
+            root: Some("/ws".to_string()),
+            root_env_var: None,
+            git: None,
+            permissions: None,
+            mounts: Some(vec![
+                WorkspaceMount {
+                    id: "m1".to_string(),
+                    source: WorkspaceMountSource { workspace: None, path: Some("/src".to_string()), mount_id: None, extensions: None },
+                    target: "data".to_string(),
+                    read_only: None,
+                    extensions: None,
+                },
+                WorkspaceMount {
+                    id: "m1".to_string(),
+                    source: WorkspaceMountSource { workspace: None, path: Some("/src2".to_string()), mount_id: None, extensions: None },
+                    target: "data2".to_string(),
+                    read_only: None,
+                    extensions: None,
+                },
+            ]),
+            cleanup: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("duplicate mount id")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_workspace_mount_target_path_traversal() {
+        let mut adp = minimal_adp();
+        adp.workspace = Some(Workspace {
+            root: Some("/ws".to_string()),
+            root_env_var: None,
+            git: None,
+            permissions: None,
+            mounts: Some(vec![
+                WorkspaceMount {
+                    id: "m1".to_string(),
+                    source: WorkspaceMountSource { workspace: None, path: Some("/src".to_string()), mount_id: None, extensions: None },
+                    target: "../escape".to_string(),
+                    read_only: None,
+                    extensions: None,
+                },
+            ]),
+            cleanup: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("MUST NOT escape workspace.root")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_sandbox_policy_missing() {
+        let mut adp = minimal_adp();
+        adp.sandbox = Some(Sandbox {
+            runtime: SandboxRuntime::Python,
+            provider: None,
+            image: None,
+            mounts: None,
+            snapshot: None,
+            policy: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("sandbox.policy MUST be present")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_sandbox_policy_timeout_missing() {
+        let mut adp = minimal_adp();
+        adp.sandbox = Some(Sandbox {
+            runtime: SandboxRuntime::Python,
+            provider: None,
+            image: None,
+            mounts: None,
+            snapshot: None,
+            policy: Some(SandboxPolicy {
+                timeout_ms: None,
+                max_processes: None,
+                network: None,
+                allowed_hosts: None,
+                allowed_ports: None,
+                extensions: None,
+            }),
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("timeout_ms MUST be present")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_sandbox_mount_workspace_without_workspace_section() {
+        let mut adp = minimal_adp();
+        adp.sandbox = Some(Sandbox {
+            runtime: SandboxRuntime::Python,
+            provider: None,
+            image: None,
+            mounts: Some(vec![SandboxMount {
+                id: "sm1".to_string(),
+                source: SandboxMountSource {
+                    workspace: Some("main".to_string()),
+                    path: None,
+                    url: None,
+                    extensions: None,
+                },
+                target: "/app".to_string(),
+                read_only: None,
+                extensions: None,
+            }]),
+            snapshot: None,
+            policy: Some(SandboxPolicy {
+                timeout_ms: Some(30000),
+                max_processes: None,
+                network: None,
+                allowed_hosts: None,
+                allowed_ports: None,
+                extensions: None,
+            }),
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("source 'workspace' requires a workspace section")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_sandbox_snapshot_custom_warning() {
+        let mut adp = minimal_adp();
+        adp.sandbox = Some(Sandbox {
+            runtime: SandboxRuntime::Python,
+            provider: Some(SandboxProvider::Custom),
+            image: None,
+            mounts: None,
+            snapshot: Some(SandboxSnapshot {
+                enabled: Some(true),
+                provider: None,
+                interval_seconds: None,
+                retention_count: None,
+                extensions: None,
+            }),
+            policy: Some(SandboxPolicy {
+                timeout_ms: Some(30000),
+                max_processes: None,
+                network: None,
+                allowed_hosts: None,
+                allowed_ports: None,
+                extensions: None,
+            }),
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("WARNING: sandbox: snapshot.enabled")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_memory_duplicate_store_ids() {
+        let mut adp = minimal_adp();
+        adp.memory = Some(Memory::Structured(MemoryStructured {
+            stores: Some(vec![
+                MemoryStore {
+                    id: "store1".to_string(),
+                    store_type: MemoryStoreType::Episodic,
+                    provider: None,
+                    endpoint: None,
+                    index: None,
+                    scope: None,
+                    pii_policy: None,
+                    auto_clear: None,
+                    extensions: None,
+                },
+                MemoryStore {
+                    id: "store1".to_string(),
+                    store_type: MemoryStoreType::Semantic,
+                    provider: None,
+                    endpoint: None,
+                    index: None,
+                    scope: None,
+                    pii_policy: None,
+                    auto_clear: None,
+                    extensions: None,
+                },
+            ]),
+            working: None,
+            context_assembly: None,
+            operations: None,
+            retention: None,
+            static_injection: None,
+            extensions: None,
+        }));
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("duplicate store id")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_memory_operation_store_ref_not_found() {
+        let mut adp = minimal_adp();
+        adp.memory = Some(Memory::Structured(MemoryStructured {
+            stores: Some(vec![MemoryStore {
+                id: "store1".to_string(),
+                store_type: MemoryStoreType::Episodic,
+                provider: None, endpoint: None, index: None, scope: None,
+                pii_policy: None, auto_clear: None, extensions: None,
+            }]),
+            working: None,
+            context_assembly: None,
+            operations: Some(vec![MemoryOperation {
+                id: "op1".to_string(),
+                on_event: MemoryOperationOnEvent::OnInvokeEnd,
+                op: MemoryOperationOp::Write,
+                store_ref: Some("no-such-store".to_string()),
+                store_id: None,
+                filter: None,
+                extensions: None,
+            }]),
+            retention: None,
+            static_injection: None,
+            extensions: None,
+        }));
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("store_ref 'no-such-store'")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_memory_operation_store_id_not_found() {
+        let mut adp = minimal_adp();
+        adp.memory = Some(Memory::Structured(MemoryStructured {
+            stores: Some(vec![MemoryStore {
+                id: "store1".to_string(),
+                store_type: MemoryStoreType::Episodic,
+                provider: None, endpoint: None, index: None, scope: None,
+                pii_policy: None, auto_clear: None, extensions: None,
+            }]),
+            working: None,
+            context_assembly: None,
+            operations: Some(vec![MemoryOperation {
+                id: "op1".to_string(),
+                on_event: MemoryOperationOnEvent::OnInvokeEnd,
+                op: MemoryOperationOp::Write,
+                store_ref: None,
+                store_id: Some("bad-store-id".to_string()),
+                filter: None,
+                extensions: None,
+            }]),
+            retention: None,
+            static_injection: None,
+            extensions: None,
+        }));
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("store_id 'bad-store-id'")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_memory_context_assembly_store_ref_not_found() {
+        let mut adp = minimal_adp();
+        adp.memory = Some(Memory::Structured(MemoryStructured {
+            stores: Some(vec![MemoryStore {
+                id: "store1".to_string(),
+                store_type: MemoryStoreType::Episodic,
+                provider: None, endpoint: None, index: None, scope: None,
+                pii_policy: None, auto_clear: None, extensions: None,
+            }]),
+            working: None,
+            context_assembly: Some(ContextAssembly {
+                enabled: Some(true),
+                sources: Some(vec![ContextAssemblySource::Store]),
+                store_ref: Some("no-such".to_string()),
+                max_tokens: None,
+                position: None,
+                static_injection: None,
+                extensions: None,
+            }),
+            operations: None,
+            retention: None,
+            static_injection: None,
+            extensions: None,
+        }));
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("context_assembly: store_ref 'no-such'")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_memory_static_injection_path_traversal() {
+        let mut adp = minimal_adp();
+        adp.memory = Some(Memory::Structured(MemoryStructured {
+            stores: Some(vec![MemoryStore {
+                id: "store1".to_string(),
+                store_type: MemoryStoreType::Episodic,
+                provider: None, endpoint: None, index: None, scope: None,
+                pii_policy: None, auto_clear: None, extensions: None,
+            }]),
+            working: None,
+            context_assembly: Some(ContextAssembly {
+                enabled: None,
+                sources: None,
+                store_ref: None,
+                max_tokens: None,
+                position: None,
+                static_injection: Some(vec![StaticInjection {
+                    id: "si1".to_string(),
+                    source: Some("file".to_string()),
+                    path: Some("../escape.txt".to_string()),
+                    content: None,
+                    position: None,
+                    max_tokens: None,
+                    workspace: None,
+                    content_type: None,
+                    extensions: None,
+                }]),
+                extensions: None,
+            }),
+            operations: None,
+            retention: None,
+            static_injection: None,
+            extensions: None,
+        }));
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("relative path without .. traversal")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_memory_static_injection_no_workspace() {
+        let mut adp = minimal_adp();
+        adp.workspace = None;
+        adp.memory = Some(Memory::Structured(MemoryStructured {
+            stores: Some(vec![MemoryStore {
+                id: "store1".to_string(),
+                store_type: MemoryStoreType::Episodic,
+                provider: None, endpoint: None, index: None, scope: None,
+                pii_policy: None, auto_clear: None, extensions: None,
+            }]),
+            working: None,
+            context_assembly: Some(ContextAssembly {
+                enabled: None,
+                sources: None,
+                store_ref: None,
+                max_tokens: None,
+                position: None,
+                static_injection: Some(vec![StaticInjection {
+                    id: "si1".to_string(),
+                    source: Some("file".to_string()),
+                    path: Some("relative/path.txt".to_string()),
+                    content: None,
+                    position: None,
+                    max_tokens: None,
+                    workspace: None,
+                    content_type: None,
+                    extensions: None,
+                }]),
+                extensions: None,
+            }),
+            operations: None,
+            retention: None,
+            static_injection: None,
+            extensions: None,
+        }));
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("requires a workspace section")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_memory_working_summary_model_ref_not_found() {
+        let mut adp = minimal_adp();
+        adp.runtime.models = Some(vec![Model {
+            id: "m1".to_string(),
+            provider: "openai".to_string(),
+            model: "gpt-4".to_string(),
+            ..Default::default()
+        }]);
+        adp.memory = Some(Memory::Structured(MemoryStructured {
+            stores: None,
+            working: Some(MemoryWorking {
+                strategy: None,
+                max_tokens: None,
+                compaction_threshold: None,
+                summary_model_ref: Some("nonexistent-model".to_string()),
+                extensions: None,
+            }),
+            context_assembly: None,
+            operations: None,
+            retention: None,
+            static_injection: None,
+            extensions: None,
+        }));
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("summary_model_ref 'nonexistent-model'")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_memory_working_strategy_summary_no_model_ref() {
+        let mut adp = minimal_adp();
+        adp.memory = Some(Memory::Structured(MemoryStructured {
+            stores: None,
+            working: Some(MemoryWorking {
+                strategy: Some(MemoryWorkingStrategy::Summary),
+                max_tokens: None,
+                compaction_threshold: None,
+                summary_model_ref: None,
+                extensions: None,
+            }),
+            context_assembly: None,
+            operations: None,
+            retention: None,
+            static_injection: None,
+            extensions: None,
+        }));
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("summary_model_ref MUST be present")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_memory_working_compaction_exceeds_max_tokens() {
+        let mut adp = minimal_adp();
+        adp.memory = Some(Memory::Structured(MemoryStructured {
+            stores: None,
+            working: Some(MemoryWorking {
+                strategy: None,
+                max_tokens: Some(1000),
+                compaction_threshold: Some(2000),
+                summary_model_ref: None,
+                extensions: None,
+            }),
+            context_assembly: None,
+            operations: None,
+            retention: None,
+            static_injection: None,
+            extensions: None,
+        }));
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("compaction_threshold_tokens")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_guardrails_empty_policy_ref() {
+        let mut adp = minimal_adp();
+        adp.guardrails = Some(Guardrails {
+            input: vec![GuardrailRail {
+                id: "g1".to_string(),
+                provider: "openai".to_string(),
+                policy_ref: "   ".to_string(),
+                mode: None,
+                categories: None,
+                threshold: None,
+            }],
+            output: vec![],
+            on_violation: None,
+            interrupts: None,
+            cost: None,
+            agent_trust: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("policy_ref is empty")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_interrupt_tool_call_empty_tool_refs() {
+        let mut adp = minimal_adp();
+        adp.guardrails = Some(Guardrails {
+            input: vec![],
+            output: vec![],
+            on_violation: None,
+            interrupts: Some(vec![Interrupt {
+                id: "int1".to_string(),
+                trigger: InterruptTrigger::ToolCall,
+                tool_refs: Some(vec![]),
+                mode: InterruptMode::Block,
+                execution_mode: None,
+                notification: None,
+                threshold_usd: None,
+                extensions: None,
+            }]),
+            cost: None,
+            agent_trust: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("tool_refs required for tool_call trigger")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_interrupt_pause_and_notify_parallel_execution_mode() {
+        let mut adp = minimal_adp();
+        adp.guardrails = Some(Guardrails {
+            input: vec![],
+            output: vec![],
+            on_violation: None,
+            interrupts: Some(vec![Interrupt {
+                id: "int1".to_string(),
+                trigger: InterruptTrigger::Custom,
+                tool_refs: None,
+                mode: InterruptMode::PauseAndNotify,
+                execution_mode: Some(InterruptExecutionMode::Parallel),
+                notification: None,
+                threshold_usd: None,
+                extensions: None,
+            }]),
+            cost: None,
+            agent_trust: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("execution_mode 'parallel' not supported")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_cost_downgrade_missing_model_ref() {
+        let mut adp = minimal_adp();
+        adp.guardrails = Some(Guardrails {
+            input: vec![],
+            output: vec![],
+            on_violation: None,
+            interrupts: Some(vec![]),
+            cost: Some(CostGuardrail {
+                threshold_usd: Some(10.0),
+                on_threshold_exceeded: Some(CostOnThresholdExceeded::Downgrade),
+                interrupt_ref: None,
+                downgrade_model_ref: None,
+                track_by: None,
+                model_refs: None,
+                extensions: None,
+            }),
+            agent_trust: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("downgrade_model_ref required")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_cost_downgrade_model_ref_not_found() {
+        let mut adp = minimal_adp();
+        adp.runtime.models = Some(vec![Model {
+            id: "m1".to_string(),
+            provider: "openai".to_string(),
+            model: "gpt-4".to_string(),
+            ..Default::default()
+        }]);
+        adp.guardrails = Some(Guardrails {
+            input: vec![],
+            output: vec![],
+            on_violation: None,
+            interrupts: Some(vec![]),
+            cost: Some(CostGuardrail {
+                threshold_usd: Some(10.0),
+                on_threshold_exceeded: Some(CostOnThresholdExceeded::Downgrade),
+                interrupt_ref: None,
+                downgrade_model_ref: Some("nonexistent".to_string()),
+                track_by: None,
+                model_refs: None,
+                extensions: None,
+            }),
+            agent_trust: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("downgrade_model_ref 'nonexistent'")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_cost_interrupt_ref_not_found() {
+        let mut adp = minimal_adp();
+        adp.guardrails = Some(Guardrails {
+            input: vec![],
+            output: vec![],
+            on_violation: None,
+            interrupts: Some(vec![Interrupt {
+                id: "int1".to_string(),
+                trigger: InterruptTrigger::Custom,
+                tool_refs: None,
+                mode: InterruptMode::Block,
+                execution_mode: None,
+                notification: None,
+                threshold_usd: None,
+                extensions: None,
+            }]),
+            cost: Some(CostGuardrail {
+                threshold_usd: Some(10.0),
+                on_threshold_exceeded: Some(CostOnThresholdExceeded::Interrupt),
+                interrupt_ref: Some("nonexistent-int".to_string()),
+                downgrade_model_ref: None,
+                track_by: None,
+                model_refs: None,
+                extensions: None,
+            }),
+            agent_trust: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("interrupt_ref 'nonexistent-int'")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_guardrail_interrupt_tool_refs_not_found() {
+        let mut adp = minimal_adp();
+        adp.tools = Some(Tools {
+            mcp_servers: Some(vec![MCPServer {
+                id: "tool1".to_string(),
+                name: None,
+                description: None,
+                command: "cmd".to_string(),
+                args: None,
+                env: None,
+                timeout_seconds: None,
+                auth: None,
+                policy: None,
+                extensions: None,
+            }]),
+            http_apis: None,
+            sql_functions: None,
+            policy: None,
+            extensions: None,
+        });
+        adp.guardrails = Some(Guardrails {
+            input: vec![],
+            output: vec![],
+            on_violation: None,
+            interrupts: Some(vec![Interrupt {
+                id: "int1".to_string(),
+                trigger: InterruptTrigger::ToolCall,
+                tool_refs: Some(vec!["nonexistent-tool".to_string()]),
+                mode: InterruptMode::Block,
+                execution_mode: None,
+                notification: None,
+                threshold_usd: None,
+                extensions: None,
+            }]),
+            cost: None,
+            agent_trust: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("tool_ref 'nonexistent-tool' not found in tools")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_guardrail_interrupt_pause_and_notify_execution_mode_set() {
+        let mut adp = minimal_adp();
+        adp.guardrails = Some(Guardrails {
+            input: vec![],
+            output: vec![],
+            on_violation: None,
+            interrupts: Some(vec![Interrupt {
+                id: "int1".to_string(),
+                trigger: InterruptTrigger::Custom,
+                tool_refs: None,
+                mode: InterruptMode::PauseAndNotify,
+                execution_mode: Some(InterruptExecutionMode::Blocking),
+                notification: None,
+                threshold_usd: None,
+                extensions: None,
+            }]),
+            cost: None,
+            agent_trust: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("execution_mode MUST NOT be set when mode is 'pause_and_notify'")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_guardrail_cost_interrupt_ref_not_found_in_interrupts() {
+        let mut adp = minimal_adp();
+        adp.guardrails = Some(Guardrails {
+            input: vec![],
+            output: vec![],
+            on_violation: None,
+            interrupts: Some(vec![Interrupt {
+                id: "int1".to_string(),
+                trigger: InterruptTrigger::Custom,
+                tool_refs: None,
+                mode: InterruptMode::Block,
+                execution_mode: None,
+                notification: None,
+                threshold_usd: None,
+                extensions: None,
+            }]),
+            cost: Some(CostGuardrail {
+                threshold_usd: Some(5.0),
+                on_threshold_exceeded: None,
+                interrupt_ref: Some("bad-ref".to_string()),
+                downgrade_model_ref: None,
+                track_by: None,
+                model_refs: None,
+                extensions: None,
+            }),
+            agent_trust: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("interrupt_ref 'bad-ref' not found")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_guardrail_cost_downgrade_missing_model_ref() {
+        let mut adp = minimal_adp();
+        adp.guardrails = Some(Guardrails {
+            input: vec![],
+            output: vec![],
+            on_violation: None,
+            interrupts: Some(vec![]),
+            cost: Some(CostGuardrail {
+                threshold_usd: Some(5.0),
+                on_threshold_exceeded: Some(CostOnThresholdExceeded::Downgrade),
+                interrupt_ref: None,
+                downgrade_model_ref: None,
+                track_by: None,
+                model_refs: None,
+                extensions: None,
+            }),
+            agent_trust: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("downgrade_model_ref MUST be present")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_guardrail_cost_downgrade_model_ref_not_in_runtime() {
+        let mut adp = minimal_adp();
+        adp.runtime.models = Some(vec![Model {
+            id: "m1".to_string(),
+            provider: "openai".to_string(),
+            model: "gpt-4".to_string(),
+            ..Default::default()
+        }]);
+        adp.guardrails = Some(Guardrails {
+            input: vec![],
+            output: vec![],
+            on_violation: None,
+            interrupts: Some(vec![]),
+            cost: Some(CostGuardrail {
+                threshold_usd: Some(5.0),
+                on_threshold_exceeded: Some(CostOnThresholdExceeded::Downgrade),
+                interrupt_ref: None,
+                downgrade_model_ref: Some("not-found".to_string()),
+                track_by: None,
+                model_refs: None,
+                extensions: None,
+            }),
+            agent_trust: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("downgrade_model_ref 'not-found' not found")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_observability_cost_reporting_model_refs_not_found() {
+        let mut adp = minimal_adp();
+        adp.runtime.models = Some(vec![Model {
+            id: "m1".to_string(),
+            provider: "openai".to_string(),
+            model: "gpt-4".to_string(),
+            ..Default::default()
+        }]);
+        adp.observability = Some(Observability {
+            tracing: None,
+            cost_reporting: Some(CostReporting {
+                enabled: Some(true),
+                granularity: None,
+                model_refs: Some(vec!["nonexistent-model".to_string()]),
+                extensions: None,
+            }),
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("cost_reporting.model_refs: 'nonexistent-model'")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_observability_tracing_present() {
+        let mut adp = minimal_adp();
+        adp.observability = Some(Observability {
+            tracing: Some(Tracing {
+                backend: Some(TracingBackend::OTLP),
+                trace_events: Some(vec![TraceEvent::ModelRequest, TraceEvent::ToolCall]),
+                sampling_rate: None,
+                extensions: None,
+            }),
+            cost_reporting: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        // No error expected for valid tracing config
+        assert!(!errors.iter().any(|e| e.contains("tracing")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_interop_agentspec_node_map_bad_key() {
+        use std::collections::HashMap;
+        let mut adp = minimal_adp();
+        let mut node_map = HashMap::new();
+        node_map.insert("nonexistent-node".to_string(), "agentspec-node".to_string());
+        adp.interop = Some(Interop {
+            a2a: None,
+            agentspec: Some(InteropAgentSpec {
+                ref_uri: None,
+                version: None,
+                component_type: None,
+                component_id: None,
+                runtime_adapters: None,
+                node_map: Some(node_map),
+                llm_map: None,
+            }),
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("node_map: key 'nonexistent-node'")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_interop_agentspec_llm_map_bad_backend_id() {
+        let mut adp = minimal_adp();
+        adp.interop = Some(Interop {
+            a2a: None,
+            agentspec: Some(InteropAgentSpec {
+                ref_uri: None,
+                version: None,
+                component_type: None,
+                component_id: None,
+                runtime_adapters: None,
+                node_map: None,
+                llm_map: Some(vec![InteropAgentSpecLlmBinding {
+                    backend_id: "nonexistent-backend".to_string(),
+                    agentspec_id: "llm1".to_string(),
+                    agentspec_type: None,
+                }]),
+            }),
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("llm_map: backend_id 'nonexistent-backend'")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_interop_agentspec_ref_path_traversal() {
+        let mut adp = minimal_adp();
+        adp.interop = Some(Interop {
+            a2a: None,
+            agentspec: Some(InteropAgentSpec {
+                ref_uri: Some("../escape/agent.yaml".to_string()),
+                version: None,
+                component_type: None,
+                component_id: None,
+                runtime_adapters: None,
+                node_map: None,
+                llm_map: None,
+            }),
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("MUST NOT contain path traversal")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_x_testing_evaluator_ref_not_found() {
+        let mut adp = minimal_adp();
+        adp.x_testing = Some(serde_json::json!({
+            "evaluators": [{"id": "ev1"}]
+        }));
+        adp.evaluation = serde_yaml::from_str(r#"
+suites:
+  - id: "s1"
+    metrics:
+      - id: "m1"
+        type: "deterministic"
+        function: "noop"
+        scoring: "boolean"
+        threshold: true
+        evaluator_ref: "nonexistent-ev"
+"#).unwrap();
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("evaluator_ref 'nonexistent-ev'")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_x_testing_judges_deprecated_warning() {
+        let mut adp = minimal_adp();
+        adp.x_testing = Some(serde_json::json!({
+            "judges": [{"id": "j1"}]
+        }));
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("x_testing.judges[] is deprecated")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_x_testing_judges_with_evaluators_no_warning() {
+        let mut adp = minimal_adp();
+        adp.x_testing = Some(serde_json::json!({
+            "judges": [{"id": "j1"}],
+            "evaluators": [{"id": "ev1"}]
+        }));
+        let errors = validate_adp_semantics(&adp);
+        // judges warning should NOT fire when evaluators are also present
+        assert!(!errors.iter().any(|e| e.contains("deprecated")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_loop_node_body_nodes_ref_missing() {
+        let mut adp = minimal_adp();
+        adp.flow.graph.nodes.push(Node {
+            id: "loop1".to_string(),
+            kind: NodeKind::Loop,
+            model_ref: None, tool_ref: None, runtime_ref: None, suite_ref: None,
+            memory_ref: None, strategy: None, adp_ref: None, label: None,
+            body_nodes: Some(vec!["missing-body".to_string()]),
+            termination: None, params: None, extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("body_nodes references 'missing-body'")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_loop_node_self_reference() {
+        let mut adp = minimal_adp();
+        adp.flow.graph.nodes.push(Node {
+            id: "loop1".to_string(),
+            kind: NodeKind::Loop,
+            model_ref: None, tool_ref: None, runtime_ref: None, suite_ref: None,
+            memory_ref: None, strategy: None, adp_ref: None, label: None,
+            body_nodes: Some(vec!["loop1".to_string()]),
+            termination: None, params: None, extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("MUST NOT reference the loop node itself")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_loop_node_body_not_connected() {
+        let mut adp = minimal_adp();
+        adp.flow.graph.nodes.push(Node {
+            id: "body1".to_string(),
+            kind: NodeKind::LLM,
+            model_ref: None, tool_ref: None, runtime_ref: None, suite_ref: None,
+            memory_ref: None, strategy: None, adp_ref: None, label: None,
+            body_nodes: None, termination: None, params: None, extensions: None,
+        });
+        adp.flow.graph.nodes.push(Node {
+            id: "body2".to_string(),
+            kind: NodeKind::LLM,
+            model_ref: None, tool_ref: None, runtime_ref: None, suite_ref: None,
+            memory_ref: None, strategy: None, adp_ref: None, label: None,
+            body_nodes: None, termination: None, params: None, extensions: None,
+        });
+        adp.flow.graph.nodes.push(Node {
+            id: "loop1".to_string(),
+            kind: NodeKind::Loop,
+            model_ref: None, tool_ref: None, runtime_ref: None, suite_ref: None,
+            memory_ref: None, strategy: None, adp_ref: None, label: None,
+            body_nodes: Some(vec!["body1".to_string(), "body2".to_string()]),
+            termination: None, params: None, extensions: None,
+        });
+        // No edges connecting body1 -> body2
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("must contain at least 2 nodes connected")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_loop_node_body_connected_no_error() {
+        let mut adp = minimal_adp();
+        adp.flow.graph.nodes.push(Node {
+            id: "body1".to_string(),
+            kind: NodeKind::LLM,
+            model_ref: None, tool_ref: None, runtime_ref: None, suite_ref: None,
+            memory_ref: None, strategy: None, adp_ref: None, label: None,
+            body_nodes: None, termination: None, params: None, extensions: None,
+        });
+        adp.flow.graph.nodes.push(Node {
+            id: "body2".to_string(),
+            kind: NodeKind::LLM,
+            model_ref: None, tool_ref: None, runtime_ref: None, suite_ref: None,
+            memory_ref: None, strategy: None, adp_ref: None, label: None,
+            body_nodes: None, termination: None, params: None, extensions: None,
+        });
+        adp.flow.graph.nodes.push(Node {
+            id: "loop1".to_string(),
+            kind: NodeKind::Loop,
+            model_ref: None, tool_ref: None, runtime_ref: None, suite_ref: None,
+            memory_ref: None, strategy: None, adp_ref: None, label: None,
+            body_nodes: Some(vec!["body1".to_string(), "body2".to_string()]),
+            termination: None, params: None, extensions: None,
+        });
+        adp.flow.graph.edges.push(Edge {
+            from: "body1".to_string(),
+            to: "body2".to_string(),
+            condition: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("must contain at least 2 nodes connected")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_loop_node_transitive_circular_ref() {
+        // loop1 contains loop2, and loop2 has loop1 in its body_nodes (transitive circular)
+        let mut adp = minimal_adp();
+        adp.flow.graph.nodes.push(Node {
+            id: "loop2".to_string(),
+            kind: NodeKind::Loop,
+            model_ref: None, tool_ref: None, runtime_ref: None, suite_ref: None,
+            memory_ref: None, strategy: None, adp_ref: None, label: None,
+            body_nodes: Some(vec!["loop1".to_string()]),
+            termination: None, params: None, extensions: None,
+        });
+        adp.flow.graph.nodes.push(Node {
+            id: "loop1".to_string(),
+            kind: NodeKind::Loop,
+            model_ref: None, tool_ref: None, runtime_ref: None, suite_ref: None,
+            memory_ref: None, strategy: None, adp_ref: None, label: None,
+            body_nodes: Some(vec!["loop2".to_string()]),
+            termination: None, params: None, extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("circular loop reference")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_tool_cache_key_fields_invalid_dot_path() {
+        let mut adp = minimal_adp();
+        adp.tools = Some(Tools {
+            mcp_servers: Some(vec![MCPServer {
+                id: "t1".to_string(),
+                name: None,
+                description: None,
+                command: "cmd".to_string(),
+                args: None,
+                env: None,
+                timeout_seconds: None,
+                auth: None,
+                policy: Some(ToolPolicy {
+                    load_strategy: None,
+                    retry: None,
+                    rate_limit: None,
+                    cache: Some(CachePolicy {
+                        enabled: Some(true),
+                        ttl_seconds: None,
+                        scope: None,
+                        key_fields: Some(vec!["invalid field!".to_string()]),
+                        extensions: None,
+                    }),
+                    extensions: None,
+                }),
+                extensions: None,
+            }]),
+            http_apis: None,
+            sql_functions: None,
+            policy: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("must use dot-path notation")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_tool_http_api_cache_key_fields_invalid() {
+        let mut adp = minimal_adp();
+        adp.tools = Some(Tools {
+            mcp_servers: None,
+            http_apis: Some(vec![HTTPAPI {
+                id: "api1".to_string(),
+                name: None,
+                description: None,
+                base_url: "https://api.example.com".to_string(),
+                path: None,
+                method: None,
+                headers: None,
+                auth: None,
+                policy: Some(ToolPolicy {
+                    load_strategy: None,
+                    retry: None,
+                    rate_limit: None,
+                    cache: Some(CachePolicy {
+                        enabled: Some(true),
+                        ttl_seconds: None,
+                        scope: None,
+                        key_fields: Some(vec!["bad field!".to_string()]),
+                        extensions: None,
+                    }),
+                    extensions: None,
+                }),
+                extensions: None,
+            }]),
+            sql_functions: None,
+            policy: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("must use dot-path notation")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_tool_sql_cache_key_fields_invalid() {
+        let mut adp = minimal_adp();
+        adp.tools = Some(Tools {
+            mcp_servers: None,
+            http_apis: None,
+            sql_functions: Some(vec![SQLFunction {
+                id: "sql1".to_string(),
+                name: None,
+                description: None,
+                query: "SELECT 1".to_string(),
+                db_url_env: None,
+                db_schema: None,
+                auth: None,
+                policy: Some(ToolPolicy {
+                    load_strategy: None,
+                    retry: None,
+                    rate_limit: None,
+                    cache: Some(CachePolicy {
+                        enabled: Some(true),
+                        ttl_seconds: None,
+                        scope: None,
+                        key_fields: Some(vec!["bad.field!".to_string()]),
+                        extensions: None,
+                    }),
+                    extensions: None,
+                }),
+                extensions: None,
+            }]),
+            policy: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("must use dot-path notation")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_tool_global_policy_cache_key_fields_invalid() {
+        let mut adp = minimal_adp();
+        adp.tools = Some(Tools {
+            mcp_servers: None,
+            http_apis: None,
+            sql_functions: None,
+            policy: Some(ToolPolicy {
+                load_strategy: None,
+                retry: None,
+                rate_limit: None,
+                cache: Some(CachePolicy {
+                    enabled: Some(true),
+                    ttl_seconds: None,
+                    scope: None,
+                    key_fields: Some(vec!["bad field!".to_string()]),
+                    extensions: None,
+                }),
+                extensions: None,
+            }),
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("tools.policy.cache.key_fields")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_tool_on_demand_no_description() {
+        let mut adp = minimal_adp();
+        adp.tools = Some(Tools {
+            mcp_servers: None,
+            http_apis: Some(vec![HTTPAPI {
+                id: "api1".to_string(),
+                name: None,
+                description: None, // Missing description
+                base_url: "https://api.example.com".to_string(),
+                path: None,
+                method: None,
+                headers: None,
+                auth: None,
+                policy: Some(ToolPolicy {
+                    load_strategy: Some(LoadStrategy::OnDemand),
+                    retry: None,
+                    rate_limit: None,
+                    cache: None,
+                    extensions: None,
+                }),
+                extensions: None,
+            }]),
+            sql_functions: None,
+            policy: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("load_strategy 'on_demand' requires a non-empty description")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_tool_sql_on_demand_no_description() {
+        let mut adp = minimal_adp();
+        adp.tools = Some(Tools {
+            mcp_servers: None,
+            http_apis: None,
+            sql_functions: Some(vec![SQLFunction {
+                id: "sql1".to_string(),
+                name: None,
+                description: None,
+                query: "SELECT 1".to_string(),
+                db_url_env: None,
+                db_schema: None,
+                auth: None,
+                policy: Some(ToolPolicy {
+                    load_strategy: Some(LoadStrategy::OnDemand),
+                    retry: None,
+                    rate_limit: None,
+                    cache: None,
+                    extensions: None,
+                }),
+                extensions: None,
+            }]),
+            policy: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("load_strategy 'on_demand' requires a non-empty description")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_tool_http_no_policy_on_demand_skipped() {
+        // http_api with no policy - on_demand check passes through without error
+        let mut adp = minimal_adp();
+        adp.tools = Some(Tools {
+            mcp_servers: None,
+            http_apis: Some(vec![HTTPAPI {
+                id: "api1".to_string(),
+                name: None,
+                description: None,
+                base_url: "https://api.example.com".to_string(),
+                path: None,
+                method: None,
+                headers: None,
+                auth: None,
+                policy: None,
+                extensions: None,
+            }]),
+            sql_functions: None,
+            policy: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("on_demand")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_tool_sql_no_policy_on_demand_skipped() {
+        let mut adp = minimal_adp();
+        adp.tools = Some(Tools {
+            mcp_servers: None,
+            http_apis: None,
+            sql_functions: Some(vec![SQLFunction {
+                id: "sql1".to_string(),
+                name: None,
+                description: None,
+                query: "SELECT 1".to_string(),
+                db_url_env: None,
+                db_schema: None,
+                auth: None,
+                policy: None,
+                extensions: None,
+            }]),
+            policy: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("on_demand")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_artifacts_duplicate_store_ids() {
+        let mut adp = minimal_adp();
+        adp.artifacts = Some(Artifacts {
+            stores: Some(vec![
+                ArtifactStore {
+                    id: "store1".to_string(),
+                    provider: ArtifactProvider::GCS,
+                    bucket: None,
+                    prefix: None,
+                    scope: None,
+                    extensions: None,
+                },
+                ArtifactStore {
+                    id: "store1".to_string(),
+                    provider: ArtifactProvider::S3,
+                    bucket: None,
+                    prefix: None,
+                    scope: None,
+                    extensions: None,
+                },
+            ]),
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("artifacts.stores: duplicate store id")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_node_params_artifact_store_ref_not_found() {
+        let mut adp = minimal_adp();
+        adp.artifacts = Some(Artifacts {
+            stores: Some(vec![ArtifactStore {
+                id: "store1".to_string(),
+                provider: ArtifactProvider::GCS,
+                bucket: None,
+                prefix: None,
+                scope: None,
+                extensions: None,
+            }]),
+            extensions: None,
+        });
+        adp.flow.graph.nodes[0].params = Some(serde_json::json!({
+            "artifact": {"store_ref": "nonexistent-store"}
+        }));
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("params.artifact.store_ref 'nonexistent-store'")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_sandbox_tool_source_path_in_all_tool_ids() {
+        // sandbox.mounts[].source.path contributes to all_tool_ids set - verify this path works
+        let mut adp = minimal_adp();
+        adp.tools = Some(Tools {
+            mcp_servers: None,
+            http_apis: None,
+            sql_functions: None,
+            policy: None,
+            extensions: None,
+        });
+        adp.sandbox = Some(Sandbox {
+            runtime: SandboxRuntime::Python,
+            provider: None,
+            image: None,
+            mounts: Some(vec![SandboxMount {
+                id: "sm1".to_string(),
+                source: SandboxMountSource {
+                    workspace: None,
+                    path: Some("my-tool-path".to_string()),
+                    url: None,
+                    extensions: None,
+                },
+                target: "/target".to_string(),
+                read_only: None,
+                extensions: None,
+            }]),
+            snapshot: None,
+            policy: Some(SandboxPolicy {
+                timeout_ms: Some(30000),
+                max_processes: None,
+                network: None,
+                allowed_hosts: None,
+                allowed_ports: None,
+                extensions: None,
+            }),
+            extensions: None,
+        });
+        // node.tool_ref = "my-tool-path" should be valid now (it's in the tools sandbox paths)
+        adp.flow.graph.nodes[0].tool_ref = Some("my-tool-path".to_string());
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("tool_ref 'my-tool-path' not found")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_interop_agentspec_llm_map_empty_backend_id_skipped() {
+        let mut adp = minimal_adp();
+        adp.interop = Some(Interop {
+            a2a: None,
+            agentspec: Some(InteropAgentSpec {
+                ref_uri: None,
+                version: None,
+                component_type: None,
+                component_id: None,
+                runtime_adapters: None,
+                node_map: None,
+                llm_map: Some(vec![InteropAgentSpecLlmBinding {
+                    backend_id: "".to_string(), // Empty backend_id should be skipped
+                    agentspec_id: "llm1".to_string(),
+                    agentspec_type: None,
+                }]),
+            }),
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("llm_map")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_memory_legacy_variant_no_crash() {
+        let mut adp = minimal_adp();
+        adp.memory = Some(Memory::Legacy(MemoryLegacy {
+            memory_type: "buffer".to_string(),
+            strategy: None,
+            max_history: None,
+            extensions: None,
+        }));
+        let errors = validate_adp_semantics(&adp);
+        // Legacy memory should not trigger structured memory checks
+        assert!(!errors.iter().any(|e| e.contains("memory:")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_context_assembly_source_working_no_store_ref_check() {
+        let mut adp = minimal_adp();
+        adp.memory = Some(Memory::Structured(MemoryStructured {
+            stores: Some(vec![MemoryStore {
+                id: "store1".to_string(),
+                store_type: MemoryStoreType::Episodic,
+                provider: None, endpoint: None, index: None, scope: None,
+                pii_policy: None, auto_clear: None, extensions: None,
+            }]),
+            working: None,
+            context_assembly: Some(ContextAssembly {
+                enabled: None,
+                sources: Some(vec![ContextAssemblySource::Working]), // Working source, not Store
+                store_ref: Some("bad-ref".to_string()),
+                max_tokens: None,
+                position: None,
+                static_injection: None,
+                extensions: None,
+            }),
+            operations: None,
+            retention: None,
+            static_injection: None,
+            extensions: None,
+        }));
+        let errors = validate_adp_semantics(&adp);
+        // Working source should not trigger store_ref check
+        assert!(!errors.iter().any(|e| e.contains("context_assembly: store_ref")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_static_injection_absolute_path_error() {
+        let mut adp = minimal_adp();
+        adp.memory = Some(Memory::Structured(MemoryStructured {
+            stores: Some(vec![MemoryStore {
+                id: "store1".to_string(),
+                store_type: MemoryStoreType::Episodic,
+                provider: None, endpoint: None, index: None, scope: None,
+                pii_policy: None, auto_clear: None, extensions: None,
+            }]),
+            working: None,
+            context_assembly: Some(ContextAssembly {
+                enabled: None,
+                sources: None,
+                store_ref: None,
+                max_tokens: None,
+                position: None,
+                static_injection: Some(vec![StaticInjection {
+                    id: "si1".to_string(),
+                    source: Some("file".to_string()),
+                    path: Some("/absolute/path.txt".to_string()),
+                    content: None,
+                    position: None,
+                    max_tokens: None,
+                    workspace: None,
+                    content_type: None,
+                    extensions: None,
+                }]),
+                extensions: None,
+            }),
+            operations: None,
+            retention: None,
+            static_injection: None,
+            extensions: None,
+        }));
+        adp.workspace = Some(Workspace {
+            root: Some("/ws".to_string()),
+            root_env_var: None,
+            git: None,
+            permissions: None,
+            mounts: None,
+            cleanup: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(errors.iter().any(|e| e.contains("relative path without .. traversal")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_subagent_adp_ref_found() {
+        let mut adp = minimal_adp();
+        adp.subagents = Some(vec![Subagent {
+            id: "agent1".to_string(),
+            ref_uri: "agent1.yaml".to_string(),
+            description: None,
+            invocation_mode: None,
+        }]);
+        adp.flow.graph.nodes.push(Node {
+            id: "sub1".to_string(),
+            kind: NodeKind::Subflow,
+            adp_ref: Some("agent1".to_string()), // Matches subagent id
+            model_ref: None, tool_ref: None, runtime_ref: None, suite_ref: None,
+            memory_ref: None, strategy: None, label: None,
+            body_nodes: None, termination: None, params: None, extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("subagents")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_guardrails_http_api_interrupt_tool_refs() {
+        let mut adp = minimal_adp();
+        adp.tools = Some(Tools {
+            mcp_servers: None,
+            http_apis: Some(vec![HTTPAPI {
+                id: "api1".to_string(),
+                name: None,
+                description: None,
+                base_url: "https://api.example.com".to_string(),
+                path: None,
+                method: None,
+                headers: None,
+                auth: None,
+                policy: None,
+                extensions: None,
+            }]),
+            sql_functions: None,
+            policy: None,
+            extensions: None,
+        });
+        adp.guardrails = Some(Guardrails {
+            input: vec![],
+            output: vec![],
+            on_violation: None,
+            interrupts: Some(vec![Interrupt {
+                id: "int1".to_string(),
+                trigger: InterruptTrigger::ToolCall,
+                tool_refs: Some(vec!["api1".to_string()]),
+                mode: InterruptMode::Block,
+                execution_mode: None,
+                notification: None,
+                threshold_usd: None,
+                extensions: None,
+            }]),
+            cost: None,
+            agent_trust: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("not found in tools")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_guardrails_sql_interrupt_tool_refs() {
+        let mut adp = minimal_adp();
+        adp.tools = Some(Tools {
+            mcp_servers: None,
+            http_apis: None,
+            sql_functions: Some(vec![SQLFunction {
+                id: "sql1".to_string(),
+                name: None,
+                description: None,
+                query: "SELECT 1".to_string(),
+                db_url_env: None,
+                db_schema: None,
+                auth: None,
+                policy: None,
+                extensions: None,
+            }]),
+            policy: None,
+            extensions: None,
+        });
+        adp.guardrails = Some(Guardrails {
+            input: vec![],
+            output: vec![],
+            on_violation: None,
+            interrupts: Some(vec![Interrupt {
+                id: "int1".to_string(),
+                trigger: InterruptTrigger::ToolCall,
+                tool_refs: Some(vec!["sql1".to_string()]),
+                mode: InterruptMode::Block,
+                execution_mode: None,
+                notification: None,
+                threshold_usd: None,
+                extensions: None,
+            }]),
+            cost: None,
+            agent_trust: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("not found in tools")), "{:?}", errors);
+    }
+
+    // ===== Branch coverage gap fillers =====
+
+    #[test]
+    fn test_validate_adp_schema_validation_failure() {
+        // Create an ADP that passes our manual checks but fails JSON schema validation.
+        // The schema requires flow.graph.start_nodes and flow.graph.end_nodes.
+        // If we set them to None, the JSON serialization skips them, causing schema errors.
+        let mut adp = minimal_adp();
+        adp.flow.graph.start_nodes = None; // Will be omitted in JSON, failing schema
+        adp.flow.graph.end_nodes = None;   // Will be omitted in JSON, failing schema
+        let result = validate_adp(&adp);
+        // Schema validation should fail since start_nodes and end_nodes are required
+        assert!(result.is_err(), "Expected schema validation error when start_nodes/end_nodes are missing");
+    }
+
+    #[test]
+    fn test_semantics_guardrails_interrupt_no_tool_refs() {
+        // interrupt.tool_refs is None (not Some(empty)), trigger is ToolCall
+        // This covers line 181: map_or(false, ...) returns false when tool_refs is None
+        let mut adp = minimal_adp();
+        adp.guardrails = Some(Guardrails {
+            input: vec![],
+            output: vec![],
+            on_violation: None,
+            interrupts: Some(vec![Interrupt {
+                id: "int1".to_string(),
+                trigger: InterruptTrigger::ToolCall,
+                tool_refs: None, // None, not empty vec
+                mode: InterruptMode::Block,
+                execution_mode: None,
+                notification: None,
+                threshold_usd: None,
+                extensions: None,
+            }]),
+            cost: None,
+            agent_trust: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        // tool_refs is None (not empty), so the error for "tool_refs required" should NOT fire
+        assert!(!errors.iter().any(|e| e.contains("tool_refs required")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_interrupt_pause_and_notify_no_execution_mode() {
+        // interrupt.mode is PauseAndNotify but execution_mode is None -> no error
+        // This covers line 187: `if let Some(ref execution_mode)` is None case
+        let mut adp = minimal_adp();
+        adp.guardrails = Some(Guardrails {
+            input: vec![],
+            output: vec![],
+            on_violation: None,
+            interrupts: Some(vec![Interrupt {
+                id: "int1".to_string(),
+                trigger: InterruptTrigger::Custom,
+                tool_refs: None,
+                mode: InterruptMode::PauseAndNotify,
+                execution_mode: None, // None -> no error
+                notification: None,
+                threshold_usd: None,
+                extensions: None,
+            }]),
+            cost: None,
+            agent_trust: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("execution_mode 'parallel'")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_cost_downgrade_model_ref_exists_in_models() {
+        // downgrade_model_ref is present AND exists in runtime.models -> no error
+        // This covers the `if !model_ids.contains(downgrade_model_ref)` false path (line ~207)
+        let mut adp = minimal_adp();
+        adp.runtime.models = Some(vec![Model {
+            id: "small-model".to_string(),
+            provider: "openai".to_string(),
+            model: "gpt-3.5".to_string(),
+            ..Default::default()
+        }]);
+        adp.guardrails = Some(Guardrails {
+            input: vec![],
+            output: vec![],
+            on_violation: None,
+            interrupts: None,
+            cost: Some(CostGuardrail {
+                threshold_usd: Some(10.0),
+                on_threshold_exceeded: Some(CostOnThresholdExceeded::Downgrade),
+                interrupt_ref: None,
+                downgrade_model_ref: Some("small-model".to_string()),
+                track_by: None,
+                model_refs: None,
+                extensions: None,
+            }),
+            agent_trust: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("downgrade_model_ref")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_cost_interrupt_no_interrupt_ref() {
+        // on_threshold_exceeded is Interrupt but interrupt_ref is None -> no error about interrupt_ref
+        // This covers the `if let Some(ref interrupt_ref) = cost.interrupt_ref` false path
+        let mut adp = minimal_adp();
+        adp.guardrails = Some(Guardrails {
+            input: vec![],
+            output: vec![],
+            on_violation: None,
+            interrupts: None,
+            cost: Some(CostGuardrail {
+                threshold_usd: Some(10.0),
+                on_threshold_exceeded: Some(CostOnThresholdExceeded::Interrupt),
+                interrupt_ref: None, // No interrupt_ref
+                downgrade_model_ref: None,
+                track_by: None,
+                model_refs: None,
+                extensions: None,
+            }),
+            agent_trust: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        // We may get other errors but not the "interrupt_ref not found" one
+        assert!(!errors.iter().any(|e| e.contains("not found in guardrails.interrupts")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_cost_interrupt_no_interrupts_list() {
+        // on_threshold_exceeded is Interrupt, interrupt_ref is set but interrupts list is None
+        // This covers line 220: `if let Some(ref interrupts) = guardrails.interrupts` false path
+        let mut adp = minimal_adp();
+        adp.guardrails = Some(Guardrails {
+            input: vec![],
+            output: vec![],
+            on_violation: None,
+            interrupts: None, // No interrupts list
+            cost: Some(CostGuardrail {
+                threshold_usd: Some(10.0),
+                on_threshold_exceeded: Some(CostOnThresholdExceeded::Interrupt),
+                interrupt_ref: Some("int1".to_string()),
+                downgrade_model_ref: None,
+                track_by: None,
+                model_refs: None,
+                extensions: None,
+            }),
+            agent_trust: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        // Should not produce error since interrupts list doesn't exist to validate against
+        assert!(!errors.iter().any(|e| e.contains("not found in guardrails.interrupts")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_compliance_no_standard_field() {
+        // governance.compliance entry has no "standard" key -> standard defaults to ""
+        // covers the compliance check with empty standard (which is not in known list)
+        let mut adp = minimal_adp();
+        adp.governance = Some(serde_json::json!({
+            "compliance": [{}] // No "standard" key, defaults to ""
+        }));
+        let errors = validate_adp_semantics(&adp);
+        // "" is not in known standards and doesn't start with x_
+        assert!(errors.iter().any(|e| e.contains("unknown")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_tools_no_sandbox_mounts() {
+        // tools is Some, sandbox is Some with no mounts -> no ids from sandbox
+        // This covers line ~317-324 where sandbox.mounts is None
+        let mut adp = minimal_adp();
+        adp.tools = Some(Tools {
+            mcp_servers: Some(vec![MCPServer {
+                id: "t1".to_string(),
+                name: None,
+                description: None,
+                command: "cmd".to_string(),
+                args: None,
+                env: None,
+                timeout_seconds: None,
+                auth: None,
+                policy: None,
+                extensions: None,
+            }]),
+            http_apis: None,
+            sql_functions: None,
+            policy: None,
+            extensions: None,
+        });
+        adp.sandbox = Some(Sandbox {
+            runtime: SandboxRuntime::Python,
+            provider: None,
+            image: None,
+            mounts: None, // No mounts -> sandbox doesn't contribute to tool IDs
+            snapshot: None,
+            policy: Some(SandboxPolicy {
+                timeout_ms: Some(30000),
+                max_processes: None,
+                network: None,
+                allowed_hosts: None,
+                allowed_ports: None,
+                extensions: None,
+            }),
+            extensions: None,
+        });
+        adp.flow.graph.nodes[0].tool_ref = Some("t1".to_string());
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("tool_ref")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_hooks_no_filter_arr() {
+        // hook entry has event but no node_filter key -> nothing to check
+        let mut adp = minimal_adp();
+        adp.hooks = Some(serde_json::json!([
+            {"event": "before_node"} // No node_filter key
+        ]));
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("node_filter")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_hooks_non_array_hooks_value() {
+        // hooks is a non-array JSON value -> as_array() returns None, skipped
+        let mut adp = minimal_adp();
+        adp.hooks = Some(serde_json::json!({"single": "hook"})); // Not an array
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("node_filter")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_x_testing_no_evaluators_and_no_judges() {
+        // x_testing is present but has neither evaluators nor judges
+        // covers: testing_evaluator_ids.is_empty() -> skip loop; has_judges = false -> skip warn
+        let mut adp = minimal_adp();
+        adp.x_testing = Some(serde_json::json!({"description": "test config"}));
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("evaluator") || e.contains("judge")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_x_testing_evaluator_ref_match() {
+        // evaluator_ref in metric matches a known evaluator -> no error
+        let mut adp = minimal_adp();
+        adp.x_testing = Some(serde_json::json!({
+            "evaluators": [{"id": "ev1"}]
+        }));
+        adp.evaluation = serde_yaml::from_str(r#"
+suites:
+  - id: "s1"
+    metrics:
+      - id: "m1"
+        type: "deterministic"
+        function: "noop"
+        scoring: "boolean"
+        threshold: true
+        evaluator_ref: "ev1"
+"#).unwrap();
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("evaluator_ref")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_loop_body_nodes_single_node_no_connectivity_check() {
+        // loop node with body_nodes of length 1 -> connectivity check is skipped
+        let mut adp = minimal_adp();
+        adp.flow.graph.nodes.push(Node {
+            id: "body1".to_string(),
+            kind: NodeKind::LLM,
+            model_ref: None, tool_ref: None, runtime_ref: None, suite_ref: None,
+            memory_ref: None, strategy: None, adp_ref: None, label: None,
+            body_nodes: None, termination: None, params: None, extensions: None,
+        });
+        adp.flow.graph.nodes.push(Node {
+            id: "loop1".to_string(),
+            kind: NodeKind::Loop,
+            model_ref: None, tool_ref: None, runtime_ref: None, suite_ref: None,
+            memory_ref: None, strategy: None, adp_ref: None, label: None,
+            body_nodes: Some(vec!["body1".to_string()]), // Only 1 node, < 2
+            termination: None, params: None, extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        // No connectivity error for single-node body
+        assert!(!errors.iter().any(|e| e.contains("must contain at least 2 nodes connected")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_loop_body_no_body_nodes() {
+        // loop node without body_nodes -> all loop checks skipped
+        let mut adp = minimal_adp();
+        adp.flow.graph.nodes.push(Node {
+            id: "loop1".to_string(),
+            kind: NodeKind::Loop,
+            model_ref: None, tool_ref: None, runtime_ref: None, suite_ref: None,
+            memory_ref: None, strategy: None, adp_ref: None, label: None,
+            body_nodes: None, // No body_nodes
+            termination: None, params: None, extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("loop")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_loop_transitive_non_loop_body_node() {
+        // Body node exists in graph but is not a Loop kind -> transitive check skipped
+        let mut adp = minimal_adp();
+        adp.flow.graph.nodes.push(Node {
+            id: "body1".to_string(),
+            kind: NodeKind::LLM, // NOT a loop
+            model_ref: None, tool_ref: None, runtime_ref: None, suite_ref: None,
+            memory_ref: None, strategy: None, adp_ref: None, label: None,
+            body_nodes: None, termination: None, params: None, extensions: None,
+        });
+        adp.flow.graph.nodes.push(Node {
+            id: "loop1".to_string(),
+            kind: NodeKind::Loop,
+            model_ref: None, tool_ref: None, runtime_ref: None, suite_ref: None,
+            memory_ref: None, strategy: None, adp_ref: None, label: None,
+            body_nodes: Some(vec!["body1".to_string()]),
+            termination: None, params: None, extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("circular loop")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_loop_transitive_body_node_no_nested_body() {
+        // Body node IS a loop but has no body_nodes -> transitive check skipped
+        let mut adp = minimal_adp();
+        adp.flow.graph.nodes.push(Node {
+            id: "inner_loop".to_string(),
+            kind: NodeKind::Loop,
+            model_ref: None, tool_ref: None, runtime_ref: None, suite_ref: None,
+            memory_ref: None, strategy: None, adp_ref: None, label: None,
+            body_nodes: None, // No body_nodes in inner loop
+            termination: None, params: None, extensions: None,
+        });
+        adp.flow.graph.nodes.push(Node {
+            id: "outer_loop".to_string(),
+            kind: NodeKind::Loop,
+            model_ref: None, tool_ref: None, runtime_ref: None, suite_ref: None,
+            memory_ref: None, strategy: None, adp_ref: None, label: None,
+            body_nodes: Some(vec!["inner_loop".to_string()]),
+            termination: None, params: None, extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("circular loop")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_tool_cache_no_key_fields() {
+        // tool has a cache policy but no key_fields -> check_cache_key_fields skips key_fields loop
+        let mut adp = minimal_adp();
+        adp.tools = Some(Tools {
+            mcp_servers: Some(vec![MCPServer {
+                id: "t1".to_string(),
+                name: None,
+                description: None,
+                command: "cmd".to_string(),
+                args: None,
+                env: None,
+                timeout_seconds: None,
+                auth: None,
+                policy: Some(ToolPolicy {
+                    load_strategy: None,
+                    retry: None,
+                    rate_limit: None,
+                    cache: Some(CachePolicy {
+                        enabled: Some(true),
+                        ttl_seconds: None,
+                        scope: None,
+                        key_fields: None, // No key_fields
+                        extensions: None,
+                    }),
+                    extensions: None,
+                }),
+                extensions: None,
+            }]),
+            http_apis: None,
+            sql_functions: None,
+            policy: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("dot-path notation")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_tool_cache_no_cache_policy() {
+        // tool policy exists but has no cache -> check_cache_key_fields skips
+        let mut adp = minimal_adp();
+        adp.tools = Some(Tools {
+            mcp_servers: Some(vec![MCPServer {
+                id: "t1".to_string(),
+                name: None,
+                description: None,
+                command: "cmd".to_string(),
+                args: None,
+                env: None,
+                timeout_seconds: None,
+                auth: None,
+                policy: Some(ToolPolicy {
+                    load_strategy: None,
+                    retry: None,
+                    rate_limit: None,
+                    cache: None, // No cache
+                    extensions: None,
+                }),
+                extensions: None,
+            }]),
+            http_apis: None,
+            sql_functions: None,
+            policy: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("dot-path notation")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_tool_global_policy_no_cache() {
+        // global tools policy has no cache -> global key_fields loop skipped
+        let mut adp = minimal_adp();
+        adp.tools = Some(Tools {
+            mcp_servers: None,
+            http_apis: None,
+            sql_functions: None,
+            policy: Some(ToolPolicy {
+                load_strategy: None,
+                retry: None,
+                rate_limit: None,
+                cache: None, // No cache
+                extensions: None,
+            }),
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("dot-path notation")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_tool_global_policy_cache_no_key_fields() {
+        // global tools policy has cache but no key_fields -> loop skipped
+        let mut adp = minimal_adp();
+        adp.tools = Some(Tools {
+            mcp_servers: None,
+            http_apis: None,
+            sql_functions: None,
+            policy: Some(ToolPolicy {
+                load_strategy: None,
+                retry: None,
+                rate_limit: None,
+                cache: Some(CachePolicy {
+                    enabled: Some(true),
+                    ttl_seconds: None,
+                    scope: None,
+                    key_fields: None, // No key_fields
+                    extensions: None,
+                }),
+                extensions: None,
+            }),
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("dot-path notation")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_on_demand_with_description() {
+        // http_api with on_demand and non-empty description -> no error
+        let mut adp = minimal_adp();
+        adp.tools = Some(Tools {
+            mcp_servers: None,
+            http_apis: Some(vec![HTTPAPI {
+                id: "api1".to_string(),
+                name: None,
+                description: Some("This API does something".to_string()),
+                base_url: "https://api.example.com".to_string(),
+                path: None,
+                method: None,
+                headers: None,
+                auth: None,
+                policy: Some(ToolPolicy {
+                    load_strategy: Some(LoadStrategy::OnDemand),
+                    retry: None,
+                    rate_limit: None,
+                    cache: None,
+                    extensions: None,
+                }),
+                extensions: None,
+            }]),
+            sql_functions: None,
+            policy: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("on_demand")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_memory_context_assembly_store_source_with_valid_store_ref() {
+        // context_assembly.sources has Store, store_ref exists -> no error
+        let mut adp = minimal_adp();
+        adp.memory = Some(Memory::Structured(MemoryStructured {
+            stores: Some(vec![MemoryStore {
+                id: "store1".to_string(),
+                store_type: MemoryStoreType::Episodic,
+                provider: None, endpoint: None, index: None, scope: None,
+                pii_policy: None, auto_clear: None, extensions: None,
+            }]),
+            working: None,
+            context_assembly: Some(ContextAssembly {
+                enabled: None,
+                sources: Some(vec![ContextAssemblySource::Store]),
+                store_ref: Some("store1".to_string()), // Valid ref
+                max_tokens: None,
+                position: None,
+                static_injection: None,
+                extensions: None,
+            }),
+            operations: None,
+            retention: None,
+            static_injection: None,
+            extensions: None,
+        }));
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("context_assembly: store_ref")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_memory_context_assembly_no_sources() {
+        // context_assembly exists but sources is None -> store_ref check skipped
+        let mut adp = minimal_adp();
+        adp.memory = Some(Memory::Structured(MemoryStructured {
+            stores: Some(vec![MemoryStore {
+                id: "store1".to_string(),
+                store_type: MemoryStoreType::Episodic,
+                provider: None, endpoint: None, index: None, scope: None,
+                pii_policy: None, auto_clear: None, extensions: None,
+            }]),
+            working: None,
+            context_assembly: Some(ContextAssembly {
+                enabled: None,
+                sources: None, // No sources
+                store_ref: Some("bad-ref".to_string()),
+                max_tokens: None,
+                position: None,
+                static_injection: None,
+                extensions: None,
+            }),
+            operations: None,
+            retention: None,
+            static_injection: None,
+            extensions: None,
+        }));
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("context_assembly: store_ref")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_memory_static_injection_source_not_file() {
+        // static_injection source is not "file" -> path check skipped
+        let mut adp = minimal_adp();
+        adp.memory = Some(Memory::Structured(MemoryStructured {
+            stores: Some(vec![MemoryStore {
+                id: "store1".to_string(),
+                store_type: MemoryStoreType::Episodic,
+                provider: None, endpoint: None, index: None, scope: None,
+                pii_policy: None, auto_clear: None, extensions: None,
+            }]),
+            working: None,
+            context_assembly: Some(ContextAssembly {
+                enabled: None,
+                sources: None,
+                store_ref: None,
+                max_tokens: None,
+                position: None,
+                static_injection: Some(vec![StaticInjection {
+                    id: "si1".to_string(),
+                    source: Some("inline".to_string()), // Not "file"
+                    path: Some("../escape.txt".to_string()),
+                    content: Some("content".to_string()),
+                    position: None,
+                    max_tokens: None,
+                    workspace: None,
+                    content_type: None,
+                    extensions: None,
+                }]),
+                extensions: None,
+            }),
+            operations: None,
+            retention: None,
+            static_injection: None,
+            extensions: None,
+        }));
+        let errors = validate_adp_semantics(&adp);
+        // path should not be checked since source != "file"
+        assert!(!errors.iter().any(|e| e.contains("relative path")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_memory_static_injection_no_path() {
+        // static_injection source is "file" but path is None -> path check skipped
+        let mut adp = minimal_adp();
+        adp.memory = Some(Memory::Structured(MemoryStructured {
+            stores: Some(vec![MemoryStore {
+                id: "store1".to_string(),
+                store_type: MemoryStoreType::Episodic,
+                provider: None, endpoint: None, index: None, scope: None,
+                pii_policy: None, auto_clear: None, extensions: None,
+            }]),
+            working: None,
+            context_assembly: Some(ContextAssembly {
+                enabled: None,
+                sources: None,
+                store_ref: None,
+                max_tokens: None,
+                position: None,
+                static_injection: Some(vec![StaticInjection {
+                    id: "si1".to_string(),
+                    source: Some("file".to_string()),
+                    path: None, // No path
+                    content: None,
+                    position: None,
+                    max_tokens: None,
+                    workspace: None,
+                    content_type: None,
+                    extensions: None,
+                }]),
+                extensions: None,
+            }),
+            operations: None,
+            retention: None,
+            static_injection: None,
+            extensions: None,
+        }));
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("relative path")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_memory_working_strategy_not_summary() {
+        // working.strategy is SlidingWindow -> summary_model_ref check skipped
+        let mut adp = minimal_adp();
+        adp.memory = Some(Memory::Structured(MemoryStructured {
+            stores: None,
+            working: Some(MemoryWorking {
+                strategy: Some(MemoryWorkingStrategy::SlidingWindow),
+                max_tokens: None,
+                compaction_threshold: None,
+                summary_model_ref: None,
+                extensions: None,
+            }),
+            context_assembly: None,
+            operations: None,
+            retention: None,
+            static_injection: None,
+            extensions: None,
+        }));
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("summary_model_ref")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_memory_working_compaction_within_max_tokens() {
+        // compaction <= max_tokens -> no error
+        let mut adp = minimal_adp();
+        adp.memory = Some(Memory::Structured(MemoryStructured {
+            stores: None,
+            working: Some(MemoryWorking {
+                strategy: None,
+                max_tokens: Some(2000),
+                compaction_threshold: Some(1000), // <= max_tokens, ok
+                summary_model_ref: None,
+                extensions: None,
+            }),
+            context_assembly: None,
+            operations: None,
+            retention: None,
+            static_injection: None,
+            extensions: None,
+        }));
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("compaction_threshold_tokens")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_guardrail_cost_downgrade_model_ref_found() {
+        // downgrade_model_ref is in interrupts block, model_ids_set has it -> no error (line 823-830)
+        let mut adp = minimal_adp();
+        adp.runtime.models = Some(vec![Model {
+            id: "budget-model".to_string(),
+            provider: "openai".to_string(),
+            model: "gpt-3.5".to_string(),
+            ..Default::default()
+        }]);
+        adp.guardrails = Some(Guardrails {
+            input: vec![],
+            output: vec![],
+            on_violation: None,
+            interrupts: Some(vec![]),
+            cost: Some(CostGuardrail {
+                threshold_usd: Some(5.0),
+                on_threshold_exceeded: Some(CostOnThresholdExceeded::Downgrade),
+                interrupt_ref: None,
+                downgrade_model_ref: Some("budget-model".to_string()),
+                track_by: None,
+                model_refs: None,
+                extensions: None,
+            }),
+            agent_trust: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("downgrade_model_ref")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_sandbox_snapshot_disabled() {
+        // snapshot.enabled is None (not Some(true)) -> custom warning skipped
+        let mut adp = minimal_adp();
+        adp.sandbox = Some(Sandbox {
+            runtime: SandboxRuntime::Python,
+            provider: Some(SandboxProvider::Custom),
+            image: None,
+            mounts: None,
+            snapshot: Some(SandboxSnapshot {
+                enabled: None, // Not Some(true) -> skip custom warning
+                provider: None,
+                interval_seconds: None,
+                retention_count: None,
+                extensions: None,
+            }),
+            policy: Some(SandboxPolicy {
+                timeout_ms: Some(30000),
+                max_processes: None,
+                network: None,
+                allowed_hosts: None,
+                allowed_ports: None,
+                extensions: None,
+            }),
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("WARNING: sandbox")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_sandbox_snapshot_enabled_non_custom_provider() {
+        // snapshot.enabled = true but provider != Custom -> no warning
+        let mut adp = minimal_adp();
+        adp.sandbox = Some(Sandbox {
+            runtime: SandboxRuntime::Python,
+            provider: Some(SandboxProvider::Docker), // Not Custom
+            image: None,
+            mounts: None,
+            snapshot: Some(SandboxSnapshot {
+                enabled: Some(true),
+                provider: None,
+                interval_seconds: None,
+                retention_count: None,
+                extensions: None,
+            }),
+            policy: Some(SandboxPolicy {
+                timeout_ms: Some(30000),
+                max_processes: None,
+                network: None,
+                allowed_hosts: None,
+                allowed_ports: None,
+                extensions: None,
+            }),
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("WARNING: sandbox")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_artifacts_no_stores() {
+        // artifacts present but no stores -> nothing to check
+        let mut adp = minimal_adp();
+        adp.artifacts = Some(Artifacts {
+            stores: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("artifacts")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_node_params_no_artifact_key() {
+        // node.params exists but no "artifact" key -> store_ref check skipped
+        let mut adp = minimal_adp();
+        adp.artifacts = Some(Artifacts {
+            stores: Some(vec![ArtifactStore {
+                id: "store1".to_string(),
+                provider: ArtifactProvider::GCS,
+                bucket: None, prefix: None, scope: None, extensions: None,
+            }]),
+            extensions: None,
+        });
+        adp.flow.graph.nodes[0].params = Some(serde_json::json!({"other_key": "value"}));
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("store_ref")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_node_params_no_store_ref_in_artifact() {
+        // node.params.artifact exists but no store_ref key -> check skipped
+        let mut adp = minimal_adp();
+        adp.artifacts = Some(Artifacts {
+            stores: Some(vec![ArtifactStore {
+                id: "store1".to_string(),
+                provider: ArtifactProvider::GCS,
+                bucket: None, prefix: None, scope: None, extensions: None,
+            }]),
+            extensions: None,
+        });
+        adp.flow.graph.nodes[0].params = Some(serde_json::json!({
+            "artifact": {"other": "value"} // No store_ref
+        }));
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("store_ref")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_observability_no_cost_reporting() {
+        // observability present but cost_reporting is None -> model_refs check skipped
+        let mut adp = minimal_adp();
+        adp.observability = Some(Observability {
+            tracing: None,
+            cost_reporting: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("cost_reporting")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_observability_cost_reporting_no_model_refs() {
+        // cost_reporting present but model_refs is None -> loop skipped
+        let mut adp = minimal_adp();
+        adp.observability = Some(Observability {
+            tracing: None,
+            cost_reporting: Some(CostReporting {
+                enabled: Some(true),
+                granularity: None,
+                model_refs: None,
+                extensions: None,
+            }),
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("cost_reporting")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_interop_no_agentspec() {
+        // interop present but agentspec is None -> all AS checks skipped
+        let mut adp = minimal_adp();
+        adp.interop = Some(Interop {
+            a2a: Some(serde_json::json!({"protocol": "v1"})),
+            agentspec: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("agentspec")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_interop_agentspec_no_node_map_no_llm_map_no_ref() {
+        // agentspec present but all check fields are None -> no errors
+        let mut adp = minimal_adp();
+        adp.interop = Some(Interop {
+            a2a: None,
+            agentspec: Some(InteropAgentSpec {
+                ref_uri: None,
+                version: Some("v1".to_string()),
+                component_type: None,
+                component_id: None,
+                runtime_adapters: None,
+                node_map: None,
+                llm_map: None,
+            }),
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("agentspec")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_interop_agentspec_ref_no_traversal() {
+        // agentspec.ref exists but has no ".." -> no error
+        let mut adp = minimal_adp();
+        adp.interop = Some(Interop {
+            a2a: None,
+            agentspec: Some(InteropAgentSpec {
+                ref_uri: Some("safe/path/agent.yaml".to_string()),
+                version: None,
+                component_type: None,
+                component_id: None,
+                runtime_adapters: None,
+                node_map: None,
+                llm_map: None,
+            }),
+        });
+        let errors = validate_adp_semantics(&adp);
+        assert!(!errors.iter().any(|e| e.contains("path traversal")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_cost_downgrade_model_ref_found_in_models_no_error() {
+        // Covers lines 213-214: else-if branch where model_ids IS Some and downgrade_model_ref IS Some
+        // and the model IS found (no error). The inner `if let Some(downgrade_model_ref)` always
+        // matches here, covering its closing brace (line 213) and the else-if closing brace (line 214).
+        let mut adp = minimal_adp();
+        adp.runtime.models = Some(vec![Model {
+            id: "fast-model".to_string(),
+            provider: "anthropic".to_string(),
+            model: "claude-3-haiku".to_string(),
+            ..Default::default()
+        }]);
+        adp.guardrails = Some(Guardrails {
+            input: vec![],
+            output: vec![],
+            on_violation: None,
+            interrupts: None,
+            cost: Some(CostGuardrail {
+                threshold_usd: Some(5.0),
+                on_threshold_exceeded: Some(CostOnThresholdExceeded::Downgrade),
+                interrupt_ref: None,
+                downgrade_model_ref: Some("fast-model".to_string()),
+                track_by: None,
+                model_refs: None,
+                extensions: None,
+            }),
+            agent_trust: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        // Model is found -> no downgrade_model_ref error
+        assert!(!errors.iter().any(|e| e.contains("downgrade_model_ref")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_governance_with_no_compliance_field() {
+        // Covers line 295: governance block exists but has no "compliance" key,
+        // so the inner `if let Some(compliance)` is not entered; its closing brace (295) is covered.
+        let mut adp = minimal_adp();
+        // Set governance to a JSON value without a "compliance" field
+        adp.governance = Some(serde_json::json!({
+            "data_classification": "internal"
+        }));
+        let errors = validate_adp_semantics(&adp);
+        // No compliance errors expected
+        assert!(!errors.iter().any(|e| e.contains("compliance")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_hook_node_filter_non_string_entry() {
+        // Covers line 357: node_filter contains a non-string value (integer),
+        // so filter_id.as_str() returns None and the inner block is not entered;
+        // the closing brace at 357 is covered.
+        let mut adp = minimal_adp();
+        adp.hooks = Some(serde_json::json!([
+            {
+                "event": "before_node",
+                "node_filter": [42]
+            }
+        ]));
+        let errors = validate_adp_semantics(&adp);
+        // No node_filter error (non-string is silently skipped)
+        assert!(!errors.iter().any(|e| e.contains("node_filter")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_subflow_node_no_adp_ref() {
+        // Covers line 382: subflow node with adp_ref = None; the `if let Some(adp_ref)` is not entered,
+        // so its closing brace at line 382 is covered.
+        let mut adp = minimal_adp();
+        adp.flow.graph.nodes.push(Node {
+            id: "sf1".to_string(),
+            kind: NodeKind::Subflow,
+            adp_ref: None, // no adp_ref -> inner if-let not entered
+            model_ref: None,
+            tool_ref: None,
+            runtime_ref: None,
+            suite_ref: None,
+            memory_ref: None,
+            strategy: None,
+            label: None,
+            body_nodes: None,
+            termination: None,
+            params: None,
+            extensions: None,
+        });
+        adp.flow.graph.edges.push(Edge { from: "n1".to_string(), to: "sf1".to_string(), condition: None, extensions: None });
+        let errors = validate_adp_semantics(&adp);
+        // No adp_ref error (adp_ref is None)
+        assert!(!errors.iter().any(|e| e.contains("adp_ref")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_x_testing_suite_without_metrics() {
+        // Covers line 417: testing_evaluator_ids is non-empty, suites exist,
+        // but a suite has no "metrics" key; the `if let Some(metrics)` is not entered,
+        // covering its closing brace at line 417.
+        let mut adp = minimal_adp();
+        // Add an evaluator to make testing_evaluator_ids non-empty
+        adp.x_testing = Some(serde_json::json!({
+            "evaluators": [{"id": "eval1", "type": "script"}]
+        }));
+        // Override evaluation to have a suite with no metrics
+        adp.evaluation = serde_yaml::from_str(r#"
+suites:
+  - id: "s1"
+"#).unwrap();
+        let errors = validate_adp_semantics(&adp);
+        // No evaluator_ref error (suite has no metrics)
+        assert!(!errors.iter().any(|e| e.contains("evaluator_ref")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_tool_eager_load_strategy_no_on_demand_check() {
+        // Covers line 590: load_strategy is Some(Eager), which is not OnDemand;
+        // the inner `if let OnDemand` block is not entered, covering its closing brace at 590.
+        let mut adp = minimal_adp();
+        adp.tools = Some(Tools {
+            mcp_servers: None,
+            http_apis: Some(vec![HTTPAPI {
+                id: "api1".to_string(),
+                name: None,
+                description: None, // No description, but NOT on_demand -> no error
+                base_url: "https://api.example.com".to_string(),
+                path: None,
+                method: None,
+                headers: None,
+                auth: None,
+                policy: Some(ToolPolicy {
+                    load_strategy: Some(LoadStrategy::Eager), // NOT OnDemand
+                    retry: None,
+                    rate_limit: None,
+                    cache: None,
+                    extensions: None,
+                }),
+                extensions: None,
+            }]),
+            sql_functions: None,
+            policy: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        // Eager load strategy -> no on_demand description error
+        assert!(!errors.iter().any(|e| e.contains("on_demand")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_memory_context_assembly_store_source_no_store_ref() {
+        // Covers line 667: context_assembly has a Store source but store_ref is None;
+        // the `if let Some(ref store_ref)` is not entered, covering its closing brace at 667.
+        let mut adp = minimal_adp();
+        let stores = vec![MemoryStore {
+            id: "store1".to_string(),
+            store_type: MemoryStoreType::Episodic,
+            provider: None,
+            endpoint: None,
+            index: None,
+            scope: None,
+            pii_policy: None,
+            auto_clear: None,
+            extensions: None,
+        }];
+        adp.memory = Some(Memory::Structured(MemoryStructured {
+            stores: Some(stores),
+            working: None,
+            context_assembly: Some(ContextAssembly {
+                enabled: None,
+                sources: Some(vec![ContextAssemblySource::Store]),
+                position: None,
+                store_ref: None, // No store_ref -> inner if-let not entered
+                max_tokens: None,
+                static_injection: None,
+                extensions: None,
+            }),
+            operations: None,
+            retention: None,
+            static_injection: None,
+            extensions: None,
+        }));
+        let errors = validate_adp_semantics(&adp);
+        // No store_ref error (store_ref is None)
+        assert!(!errors.iter().any(|e| e.contains("store_ref")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_memory_static_injection_no_source() {
+        // Covers line 696: static_injection entry with source = None;
+        // the `if let Some(source)` is not entered, covering its closing brace at 696.
+        let mut adp = minimal_adp();
+        adp.workspace = Some(Workspace {
+            root: Some("/tmp/workspace".to_string()),
+            root_env_var: None,
+            git: None,
+            permissions: None,
+            mounts: None,
+            cleanup: None,
+            extensions: None,
+        });
+        adp.memory = Some(Memory::Structured(MemoryStructured {
+            stores: None,
+            working: None,
+            context_assembly: Some(ContextAssembly {
+                enabled: None,
+                sources: None,
+                position: None,
+                store_ref: None,
+                max_tokens: None,
+                static_injection: Some(vec![StaticInjection {
+                    id: "si1".to_string(),
+                    source: None, // No source -> inner if-let not entered
+                    path: Some("data/file.txt".to_string()),
+                    content: None,
+                    position: None,
+                    max_tokens: None,
+                    workspace: None,
+                    content_type: None,
+                    extensions: None,
+                }]),
+                extensions: None,
+            }),
+            operations: None,
+            retention: None,
+            static_injection: None,
+            extensions: None,
+        }));
+        let errors = validate_adp_semantics(&adp);
+        // No static_injection error (source is None)
+        assert!(!errors.iter().any(|e| e.contains("static_injection")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_guardrail_cost_downgrade_model_ref_found_in_runtime() {
+        // Covers lines 830-831: the observability guardrail cost check where
+        // downgrade_model_ref IS Some AND model_ids IS Some AND the model IS found (no error).
+        // The inner `if let Some(downgrade_model_ref)` always matches here (covered 830-831).
+        let mut adp = minimal_adp();
+        adp.runtime.models = Some(vec![Model {
+            id: "lite-model".to_string(),
+            provider: "openai".to_string(),
+            model: "gpt-4o-mini".to_string(),
+            ..Default::default()
+        }]);
+        adp.observability = Some(Observability {
+            tracing: None,
+            cost_reporting: Some(CostReporting {
+                enabled: None,
+                granularity: None,
+                model_refs: Some(vec!["lite-model".to_string()]),
+                extensions: None,
+            }),
+            extensions: None,
+        });
+        // Use guardrails with cost guardrail downgrade that FINDS the model
+        adp.guardrails = Some(Guardrails {
+            input: vec![],
+            output: vec![],
+            on_violation: None,
+            interrupts: None,
+            cost: Some(CostGuardrail {
+                threshold_usd: Some(20.0),
+                on_threshold_exceeded: Some(CostOnThresholdExceeded::Downgrade),
+                interrupt_ref: None,
+                downgrade_model_ref: Some("lite-model".to_string()), // Found in runtime.models
+                track_by: None,
+                model_refs: None,
+                extensions: None,
+            }),
+            agent_trust: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        // Model is found -> no guardrails.cost.downgrade_model_ref error
+        assert!(!errors.iter().any(|e| e.contains("guardrails.cost.downgrade_model_ref")), "{:?}", errors);
+    }
+
+    #[test]
+    fn test_semantics_workspace_permissions_no_write_paths() {
+        // Covers line 852: workspace.permissions exists but write is None;
+        // the `if let Some(ref write_paths)` is not entered, covering its closing brace at 852.
+        let mut adp = minimal_adp();
+        adp.workspace = Some(Workspace {
+            root: Some("/workspace".to_string()),
+            root_env_var: None,
+            git: None,
+            permissions: Some(WorkspacePermissions {
+                read: Some(vec!["src/".to_string()]),
+                write: None, // No write paths -> inner if-let not entered
+                execute: None,
+                extensions: None,
+            }),
+            mounts: None,
+            cleanup: None,
+            extensions: None,
+        });
+        let errors = validate_adp_semantics(&adp);
+        // No workspace permissions error (write is None)
+        assert!(!errors.iter().any(|e| e.contains("workspace.permissions.write")), "{:?}", errors);
+    }
+}

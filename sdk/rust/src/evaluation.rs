@@ -178,6 +178,322 @@ mod tests {
         };
         assert!(matches!(ev.resolve_script(), Err(EvaluatorError::MissingField(_))));
     }
+
+    // ===== EvaluatorError Display tests =====
+
+    #[test]
+    fn evaluator_error_unsupported_type_display() {
+        let e = EvaluatorError::UnsupportedType("foo".to_string());
+        assert_eq!(format!("{}", e), "Unsupported evaluator type: 'foo'");
+    }
+
+    #[test]
+    fn evaluator_error_missing_field_display() {
+        let e = EvaluatorError::MissingField("runtime".to_string());
+        assert_eq!(format!("{}", e), "Missing required field: 'runtime'");
+    }
+
+    #[test]
+    fn evaluator_error_runtime_error_display() {
+        let e = EvaluatorError::RuntimeError("crash".to_string());
+        assert_eq!(format!("{}", e), "Runtime error: crash");
+    }
+
+    #[test]
+    fn evaluator_error_is_std_error() {
+        let e = EvaluatorError::RuntimeError("test".to_string());
+        let _: &dyn std::error::Error = &e;
+    }
+
+    // Helper to extract the error from a load_evaluator result
+    fn unwrap_load_err(result: Result<Box<dyn Evaluator>, EvaluatorError>) -> EvaluatorError {
+        match result {
+            Err(e) => e,
+            Ok(_) => panic!("Expected Err but got Ok"),
+        }
+    }
+
+    // ===== load_evaluator tests =====
+
+    #[test]
+    fn load_evaluator_missing_type_returns_unsupported() {
+        let config = serde_json::json!({});
+        let result = load_evaluator(&config);
+        assert!(result.is_err());
+        let err = unwrap_load_err(result);
+        assert!(matches!(err, EvaluatorError::UnsupportedType(_)));
+        assert!(format!("{}", err).contains("(missing)"));
+    }
+
+    #[test]
+    fn load_evaluator_deterministic_returns_unsupported() {
+        let config = serde_json::json!({"type": "deterministic"});
+        let result = load_evaluator(&config);
+        assert!(result.is_err());
+        assert!(matches!(unwrap_load_err(result), EvaluatorError::UnsupportedType(_)));
+    }
+
+    #[test]
+    fn load_evaluator_llm_judge_returns_unsupported() {
+        let config = serde_json::json!({"type": "llm_judge"});
+        let result = load_evaluator(&config);
+        assert!(result.is_err());
+        assert!(matches!(unwrap_load_err(result), EvaluatorError::UnsupportedType(_)));
+    }
+
+    #[test]
+    fn load_evaluator_container_returns_unsupported() {
+        let config = serde_json::json!({"type": "container"});
+        let result = load_evaluator(&config);
+        assert!(result.is_err());
+        assert!(matches!(unwrap_load_err(result), EvaluatorError::UnsupportedType(_)));
+    }
+
+    #[test]
+    fn load_evaluator_unknown_type_returns_unsupported() {
+        let config = serde_json::json!({"type": "mystery_type"});
+        let result = load_evaluator(&config);
+        assert!(result.is_err());
+        assert!(matches!(unwrap_load_err(result), EvaluatorError::UnsupportedType(_)));
+    }
+
+    // ===== ScriptEvaluator::new tests =====
+
+    #[test]
+    fn script_evaluator_new_missing_runtime() {
+        let config = serde_json::json!({"type": "script", "inline": "echo hi"});
+        let result = load_evaluator(&config);
+        assert!(result.is_err());
+        assert!(matches!(unwrap_load_err(result), EvaluatorError::MissingField(_)));
+    }
+
+    #[test]
+    fn script_evaluator_new_unsupported_runtime() {
+        let config = serde_json::json!({"type": "script", "runtime": "python", "inline": "print()"});
+        let result = load_evaluator(&config);
+        assert!(result.is_err());
+        assert!(matches!(unwrap_load_err(result), EvaluatorError::UnsupportedType(_)));
+    }
+
+    #[test]
+    fn script_evaluator_new_missing_inline_and_script_ref() {
+        let config = serde_json::json!({"type": "script", "runtime": "bash"});
+        let result = load_evaluator(&config);
+        assert!(result.is_err());
+        assert!(matches!(unwrap_load_err(result), EvaluatorError::MissingField(_)));
+    }
+
+    #[test]
+    fn script_evaluator_new_with_inline() {
+        let config = serde_json::json!({"type": "script", "runtime": "bash", "inline": "echo true"});
+        let result = load_evaluator(&config);
+        assert!(result.is_ok(), "Expected Ok from load_evaluator with inline script");
+    }
+
+    #[test]
+    fn script_evaluator_new_with_script_ref() {
+        let config = serde_json::json!({"type": "script", "runtime": "bash", "script_ref": "/tmp/myscript.sh"});
+        let result = load_evaluator(&config);
+        assert!(result.is_ok(), "Expected Ok from load_evaluator with script_ref");
+    }
+
+    // ===== resolve_script tests =====
+
+    #[test]
+    fn resolve_script_inline_wins() {
+        let ev = ScriptEvaluator {
+            id: "t".into(),
+            runtime: "bash".into(),
+            inline: Some("echo inline".into()),
+            script_ref: Some("/tmp/other.sh".into()),
+        };
+        let script = ev.resolve_script().unwrap();
+        assert_eq!(script, "echo inline");
+    }
+
+    #[test]
+    fn resolve_script_git_pinned_ref_returns_error() {
+        let ev = ScriptEvaluator {
+            id: "t".into(),
+            runtime: "bash".into(),
+            inline: None,
+            script_ref: Some("git+https://github.com/org/repo.git".into()),
+        };
+        let result = ev.resolve_script();
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), EvaluatorError::UnsupportedType(_)));
+    }
+
+    #[test]
+    fn resolve_script_file_not_found_returns_runtime_error() {
+        let ev = ScriptEvaluator {
+            id: "t".into(),
+            runtime: "bash".into(),
+            inline: None,
+            script_ref: Some("/this/path/does/not/exist.sh".into()),
+        };
+        let result = ev.resolve_script();
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), EvaluatorError::RuntimeError(_)));
+    }
+
+    // ===== Evaluator::evaluate tests (ScriptEvaluator) =====
+
+    #[test]
+    fn evaluate_inline_bool_true_output() {
+        let config = serde_json::json!({"type": "script", "runtime": "bash", "inline": "echo true"});
+        let evaluator = load_evaluator(&config).unwrap();
+        let output = serde_json::json!("test output");
+        let context = serde_json::json!({});
+        let result = evaluator.evaluate(&output, &context);
+        assert!(result.is_ok());
+        let eval_result = result.unwrap();
+        assert!(eval_result.passed);
+        assert_eq!(eval_result.evaluator_type, "script");
+    }
+
+    #[test]
+    fn evaluate_inline_json_object_output() {
+        let config = serde_json::json!({
+            "type": "script",
+            "runtime": "bash",
+            "id": "my-evaluator",
+            "inline": r#"echo '{"passed": true, "score": 0.9, "reason": "good"}'"#
+        });
+        let evaluator = load_evaluator(&config).unwrap();
+        let result = evaluator.evaluate(&serde_json::json!("output"), &serde_json::json!({})).unwrap();
+        assert!(result.passed);
+        assert_eq!(result.score, Some(0.9));
+        assert_eq!(result.reason, "good");
+        assert_eq!(result.evaluator_id, "my-evaluator");
+    }
+
+    #[test]
+    fn evaluate_inline_json_object_score_based_passed() {
+        // When no "passed" key but score >= 0.5
+        let config = serde_json::json!({
+            "type": "script",
+            "runtime": "bash",
+            "inline": r#"echo '{"score": 0.7}'"#
+        });
+        let evaluator = load_evaluator(&config).unwrap();
+        let result = evaluator.evaluate(&serde_json::json!("out"), &serde_json::json!({})).unwrap();
+        assert!(result.passed);
+    }
+
+    #[test]
+    fn evaluate_inline_json_object_score_based_failed() {
+        // score < 0.5 → failed
+        let config = serde_json::json!({
+            "type": "script",
+            "runtime": "bash",
+            "inline": r#"echo '{"score": 0.3}'"#
+        });
+        let evaluator = load_evaluator(&config).unwrap();
+        let result = evaluator.evaluate(&serde_json::json!("out"), &serde_json::json!({})).unwrap();
+        assert!(!result.passed);
+    }
+
+    #[test]
+    fn evaluate_inline_bash_failure_returns_ok_with_passed_false() {
+        let config = serde_json::json!({
+            "type": "script",
+            "runtime": "bash",
+            "inline": "exit 1"
+        });
+        let evaluator = load_evaluator(&config).unwrap();
+        let result = evaluator.evaluate(&serde_json::json!("out"), &serde_json::json!({})).unwrap();
+        assert!(!result.passed);
+        assert!(result.reason.contains("bash error"));
+    }
+
+    #[test]
+    fn evaluate_inline_invalid_json_output_returns_runtime_error() {
+        let config = serde_json::json!({
+            "type": "script",
+            "runtime": "bash",
+            "inline": "echo 'not valid json at all {{{'}"
+        });
+        let evaluator = load_evaluator(&config).unwrap();
+        let result = evaluator.evaluate(&serde_json::json!("out"), &serde_json::json!({}));
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), EvaluatorError::RuntimeError(_)));
+    }
+
+    #[test]
+    fn evaluate_inline_json_null_output() {
+        // null output falls through to the _ arm of normalize_result
+        let config = serde_json::json!({
+            "type": "script",
+            "runtime": "bash",
+            "inline": "echo null"
+        });
+        let evaluator = load_evaluator(&config).unwrap();
+        let result = evaluator.evaluate(&serde_json::json!("out"), &serde_json::json!({})).unwrap();
+        assert!(!result.passed);
+        assert_eq!(result.score, None);
+    }
+
+    #[test]
+    fn evaluate_inline_json_false_output() {
+        let config = serde_json::json!({
+            "type": "script",
+            "runtime": "bash",
+            "inline": "echo false"
+        });
+        let evaluator = load_evaluator(&config).unwrap();
+        let result = evaluator.evaluate(&serde_json::json!("out"), &serde_json::json!({})).unwrap();
+        assert!(!result.passed);
+        assert_eq!(result.score, Some(0.0));
+    }
+
+    // ===== normalize_result tests (via evaluate) =====
+
+    #[test]
+    fn normalize_result_bool_true() {
+        let r = normalize_result(&serde_json::json!(true), "ev1", "script");
+        assert!(r.passed);
+        assert_eq!(r.score, Some(1.0));
+        assert_eq!(r.evaluator_id, "ev1");
+        assert_eq!(r.evaluator_type, "script");
+    }
+
+    #[test]
+    fn normalize_result_bool_false() {
+        let r = normalize_result(&serde_json::json!(false), "ev2", "test");
+        assert!(!r.passed);
+        assert_eq!(r.score, Some(0.0));
+    }
+
+    #[test]
+    fn normalize_result_object_with_passed_key() {
+        let r = normalize_result(
+            &serde_json::json!({"passed": false, "score": 0.8, "reason": "partial"}),
+            "ev3", "script"
+        );
+        assert!(!r.passed);
+        assert_eq!(r.score, Some(0.8));
+        assert_eq!(r.reason, "partial");
+    }
+
+    #[test]
+    fn normalize_result_object_no_passed_no_score() {
+        // Neither passed nor score → defaults to false
+        let r = normalize_result(
+            &serde_json::json!({"reason": "something"}),
+            "ev4", "script"
+        );
+        assert!(!r.passed);
+        assert_eq!(r.score, None);
+    }
+
+    #[test]
+    fn normalize_result_number_falls_through_to_default() {
+        // Number is neither Bool nor Object → _ arm: passed = as_bool().unwrap_or(false) = false
+        let r = normalize_result(&serde_json::json!(42), "ev5", "script");
+        assert!(!r.passed);
+        assert_eq!(r.score, None);
+    }
 }
 
 fn normalize_result(raw: &serde_json::Value, id: &str, eval_type: &str) -> EvaluationResult {

@@ -1300,4 +1300,693 @@ mod tests {
         let entry: OverrideEntry = serde_json::from_str(r#"{"path": "/id", "value": "test"}"#).unwrap();
         assert_eq!(entry.op, "set");
     }
+
+    // ===== load_adp tests =====
+
+    #[test]
+    fn test_load_adp_happy_path() {
+        use std::io::Write;
+        let mut tmp = tempfile::NamedTempFile::new().unwrap();
+        write!(tmp, r#"adp_version: "0.1.0"
+id: "loaded-agent"
+runtime:
+  execution:
+    - id: "r1"
+      backend: "python"
+      entrypoint: "agent.main:app"
+flow:
+  id: "loaded.flow"
+  graph:
+    nodes:
+      - id: "n1"
+        kind: "input"
+    edges: []
+    start_nodes: ["n1"]
+    end_nodes: ["n1"]
+evaluation:
+  suites:
+    - id: "s1"
+      metrics:
+        - id: "m1"
+          type: "deterministic"
+          function: "noop"
+          scoring: "boolean"
+          threshold: true
+"#).unwrap();
+        let adp = load_adp(tmp.path().to_str().unwrap()).unwrap();
+        assert_eq!(adp.id, "loaded-agent");
+        assert_eq!(adp.adp_version, "0.1.0");
+        assert_eq!(adp.runtime.execution[0].id, "r1");
+    }
+
+    #[test]
+    fn test_load_adp_file_not_found() {
+        let result = load_adp("/nonexistent/path/agent.yaml");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_load_adp_invalid_yaml() {
+        use std::io::Write;
+        let mut tmp = tempfile::NamedTempFile::new().unwrap();
+        write!(tmp, "{{invalid_yaml: [[[}}}}}}\n").unwrap();
+        let result = load_adp(tmp.path().to_str().unwrap());
+        assert!(result.is_err());
+    }
+
+    // ===== Adp::default tests =====
+
+    #[test]
+    fn test_adp_default() {
+        let adp = Adp::default();
+        assert_eq!(adp.adp_version, "");
+        assert_eq!(adp.id, "");
+        assert!(adp.conformance_class.is_none());
+        assert!(adp.runtime.execution.is_empty());
+        assert!(adp.runtime.models.is_none());
+        assert_eq!(adp.flow.id, "");
+        assert!(adp.flow.graph.nodes.is_empty());
+        assert!(adp.flow.graph.edges.is_empty());
+        assert!(adp.flow.graph.start_nodes.is_none());
+        assert!(adp.flow.graph.end_nodes.is_none());
+        assert!(adp.extends.is_none());
+        assert!(adp.imports.is_none());
+        assert!(adp.overrides.is_none());
+        assert!(adp.guardrails.is_none());
+        assert!(adp.telemetry.is_none());
+        assert!(adp.subagents.is_none());
+        assert!(adp.hooks.is_none());
+        assert!(adp.tools.is_none());
+        assert!(adp.governance.is_none());
+        assert!(adp.memory.is_none());
+        assert!(adp.workspace.is_none());
+        assert!(adp.sandbox.is_none());
+        assert!(adp.artifacts.is_none());
+        assert!(adp.observability.is_none());
+        assert!(adp.interop.is_none());
+    }
+
+    // ===== RuntimeEntry::default tests =====
+
+    #[test]
+    fn test_runtime_entry_default() {
+        let entry = RuntimeEntry::default();
+        assert_eq!(entry.backend, "");
+        assert_eq!(entry.id, "");
+        assert!(entry.entrypoint.is_none());
+        assert!(entry.image.is_none());
+        assert!(entry.module.is_none());
+        assert!(entry.path.is_none());
+        assert!(entry.backend_type.is_none());
+        assert!(entry.endpoint.is_none());
+        assert!(entry.package_manager.is_none());
+    }
+
+    // ===== Model::default tests =====
+
+    #[test]
+    fn test_model_default() {
+        let m = Model::default();
+        assert_eq!(m.id, "");
+        assert_eq!(m.provider, "");
+        assert_eq!(m.model, "");
+        assert!(m.api_key_env.is_none());
+        assert!(m.temperature.is_none());
+        assert!(m.max_tokens.is_none());
+        assert!(m.top_p.is_none());
+        assert!(m.seed.is_none());
+        assert!(m.timeout_ms.is_none());
+        assert!(m.use_streaming_api.is_none());
+        assert!(m.stop_sequences.is_none());
+        assert!(m.frequency_penalty.is_none());
+        assert!(m.presence_penalty.is_none());
+        assert!(m.structured_output.is_none());
+    }
+
+    // ===== Telemetry::default tests =====
+
+    #[test]
+    fn test_telemetry_default() {
+        let t = Telemetry::default();
+        assert!(t.endpoint.is_none());
+        assert!(t.protocol.is_none());
+        assert!(t.service_name.is_none());
+        assert!(t.sampling_rate.is_none());
+        assert!(t.required_attributes.is_empty());
+    }
+
+    // ===== Serialization/deserialization round-trip tests =====
+
+    #[test]
+    fn test_node_kind_serialization() {
+        let kinds = vec![
+            NodeKind::Input,
+            NodeKind::Output,
+            NodeKind::LLM,
+            NodeKind::Tool,
+            NodeKind::Router,
+            NodeKind::Retriever,
+            NodeKind::Evaluator,
+            NodeKind::Subflow,
+            NodeKind::Loop,
+        ];
+        for kind in kinds {
+            let json = serde_json::to_string(&kind).unwrap();
+            let back: NodeKind = serde_json::from_str(&json).unwrap();
+            assert_eq!(kind, back);
+        }
+    }
+
+    #[test]
+    fn test_auth_scheme_serialization() {
+        let schemes = vec![
+            AuthScheme::Bearer,
+            AuthScheme::ApiKey,
+            AuthScheme::OAuth2,
+            AuthScheme::MTLS,
+            AuthScheme::None,
+        ];
+        for scheme in schemes {
+            let json = serde_json::to_string(&scheme).unwrap();
+            let back: AuthScheme = serde_json::from_str(&json).unwrap();
+            assert_eq!(scheme, back);
+        }
+    }
+
+    #[test]
+    fn test_memory_working_strategy_serialization() {
+        let strategies = vec![
+            MemoryWorkingStrategy::SlidingWindow,
+            MemoryWorkingStrategy::Full,
+            MemoryWorkingStrategy::Summary,
+        ];
+        for s in strategies {
+            let json = serde_json::to_string(&s).unwrap();
+            let back: MemoryWorkingStrategy = serde_json::from_str(&json).unwrap();
+            assert_eq!(s, back);
+        }
+    }
+
+    #[test]
+    fn test_interrupt_trigger_serialization() {
+        let triggers = vec![
+            InterruptTrigger::ToolCall,
+            InterruptTrigger::CostThreshold,
+            InterruptTrigger::LoopMaxExceeded,
+            InterruptTrigger::Custom,
+        ];
+        for t in triggers {
+            let json = serde_json::to_string(&t).unwrap();
+            let back: InterruptTrigger = serde_json::from_str(&json).unwrap();
+            assert_eq!(t, back);
+        }
+    }
+
+    #[test]
+    fn test_interrupt_mode_serialization() {
+        let modes = vec![
+            InterruptMode::PauseAndNotify,
+            InterruptMode::Block,
+            InterruptMode::Log,
+        ];
+        for m in modes {
+            let json = serde_json::to_string(&m).unwrap();
+            let back: InterruptMode = serde_json::from_str(&json).unwrap();
+            assert_eq!(m, back);
+        }
+    }
+
+    #[test]
+    fn test_interrupt_execution_mode_serialization() {
+        let modes = vec![
+            InterruptExecutionMode::Blocking,
+            InterruptExecutionMode::Parallel,
+        ];
+        for m in modes {
+            let json = serde_json::to_string(&m).unwrap();
+            let back: InterruptExecutionMode = serde_json::from_str(&json).unwrap();
+            assert_eq!(m, back);
+        }
+    }
+
+    #[test]
+    fn test_cost_on_threshold_exceeded_serialization() {
+        let variants = vec![
+            CostOnThresholdExceeded::Block,
+            CostOnThresholdExceeded::Warn,
+            CostOnThresholdExceeded::Interrupt,
+            CostOnThresholdExceeded::Downgrade,
+        ];
+        for v in variants {
+            let json = serde_json::to_string(&v).unwrap();
+            let back: CostOnThresholdExceeded = serde_json::from_str(&json).unwrap();
+            assert_eq!(v, back);
+        }
+    }
+
+    #[test]
+    fn test_sandbox_provider_serialization() {
+        let providers = vec![
+            SandboxProvider::Docker,
+            SandboxProvider::E2B,
+            SandboxProvider::Modal,
+            SandboxProvider::Daytona,
+            SandboxProvider::Vercel,
+            SandboxProvider::Cloudflare,
+            SandboxProvider::Runloop,
+            SandboxProvider::Blaxel,
+            SandboxProvider::Custom,
+        ];
+        for p in providers {
+            let json = serde_json::to_string(&p).unwrap();
+            let back: SandboxProvider = serde_json::from_str(&json).unwrap();
+            assert_eq!(p, back);
+        }
+    }
+
+    #[test]
+    fn test_sandbox_runtime_serialization() {
+        let runtimes = vec![
+            SandboxRuntime::Python,
+            SandboxRuntime::Node,
+            SandboxRuntime::Bash,
+            SandboxRuntime::Browser,
+            SandboxRuntime::Custom,
+        ];
+        for r in runtimes {
+            let json = serde_json::to_string(&r).unwrap();
+            let back: SandboxRuntime = serde_json::from_str(&json).unwrap();
+            assert_eq!(r, back);
+        }
+    }
+
+    #[test]
+    fn test_artifact_provider_serialization() {
+        let providers = vec![
+            ArtifactProvider::GCS,
+            ArtifactProvider::S3,
+            ArtifactProvider::AzureBlob,
+            ArtifactProvider::InMemory,
+            ArtifactProvider::Local,
+        ];
+        for p in providers {
+            let json = serde_json::to_string(&p).unwrap();
+            let back: ArtifactProvider = serde_json::from_str(&json).unwrap();
+            assert_eq!(p, back);
+        }
+    }
+
+    #[test]
+    fn test_load_strategy_serialization() {
+        let strategies = vec![
+            LoadStrategy::Eager,
+            LoadStrategy::Lazy,
+            LoadStrategy::OnDemand,
+        ];
+        for s in strategies {
+            let json = serde_json::to_string(&s).unwrap();
+            let back: LoadStrategy = serde_json::from_str(&json).unwrap();
+            assert_eq!(s, back);
+        }
+    }
+
+    #[test]
+    fn test_tracing_backend_serialization() {
+        let backends = vec![
+            TracingBackend::OTLP,
+            TracingBackend::Langfuse,
+            TracingBackend::Langsmith,
+            TracingBackend::Arize,
+            TracingBackend::Phoenix,
+            TracingBackend::Stdout,
+            TracingBackend::None,
+        ];
+        for b in backends {
+            let json = serde_json::to_string(&b).unwrap();
+            let back: TracingBackend = serde_json::from_str(&json).unwrap();
+            assert_eq!(b, back);
+        }
+    }
+
+    #[test]
+    fn test_trace_event_serialization() {
+        let events = vec![
+            TraceEvent::ModelRequest,
+            TraceEvent::ToolCall,
+            TraceEvent::FlowNode,
+            TraceEvent::LoopIteration,
+            TraceEvent::Interrupt,
+            TraceEvent::CostCheck,
+            TraceEvent::ArtifactWrite,
+        ];
+        for e in events {
+            let json = serde_json::to_string(&e).unwrap();
+            let back: TraceEvent = serde_json::from_str(&json).unwrap();
+            assert_eq!(e, back);
+        }
+    }
+
+    #[test]
+    fn test_memory_store_type_serialization() {
+        let types = vec![MemoryStoreType::Episodic, MemoryStoreType::Semantic];
+        for t in types {
+            let json = serde_json::to_string(&t).unwrap();
+            let back: MemoryStoreType = serde_json::from_str(&json).unwrap();
+            assert_eq!(t, back);
+        }
+    }
+
+    #[test]
+    fn test_memory_store_scope_serialization() {
+        let scopes = vec![
+            MemoryStoreScope::Agent,
+            MemoryStoreScope::Session,
+            MemoryStoreScope::User,
+        ];
+        for s in scopes {
+            let json = serde_json::to_string(&s).unwrap();
+            let back: MemoryStoreScope = serde_json::from_str(&json).unwrap();
+            assert_eq!(s, back);
+        }
+    }
+
+    #[test]
+    fn test_pii_policy_serialization() {
+        let policies = vec![
+            PiiPolicy::Redact,
+            PiiPolicy::Encrypt,
+            PiiPolicy::Block,
+            PiiPolicy::Log,
+        ];
+        for p in policies {
+            let json = serde_json::to_string(&p).unwrap();
+            let back: PiiPolicy = serde_json::from_str(&json).unwrap();
+            assert_eq!(p, back);
+        }
+    }
+
+    #[test]
+    fn test_auto_clear_on_serialization() {
+        let variants = vec![
+            AutoClearOn::SessionEnd,
+            AutoClearOn::AgentStop,
+            AutoClearOn::Never,
+        ];
+        for v in variants {
+            let json = serde_json::to_string(&v).unwrap();
+            let back: AutoClearOn = serde_json::from_str(&json).unwrap();
+            assert_eq!(v, back);
+        }
+    }
+
+    #[test]
+    fn test_context_assembly_source_serialization() {
+        let sources = vec![ContextAssemblySource::Working, ContextAssemblySource::Store];
+        for s in sources {
+            let json = serde_json::to_string(&s).unwrap();
+            let back: ContextAssemblySource = serde_json::from_str(&json).unwrap();
+            assert_eq!(s, back);
+        }
+    }
+
+    #[test]
+    fn test_context_assembly_position_serialization() {
+        let positions = vec![ContextAssemblyPosition::Prepend, ContextAssemblyPosition::Append];
+        for p in positions {
+            let json = serde_json::to_string(&p).unwrap();
+            let back: ContextAssemblyPosition = serde_json::from_str(&json).unwrap();
+            assert_eq!(p, back);
+        }
+    }
+
+    #[test]
+    fn test_memory_operation_on_event_serialization() {
+        let event = MemoryOperationOnEvent::OnInvokeEnd;
+        let json = serde_json::to_string(&event).unwrap();
+        let back: MemoryOperationOnEvent = serde_json::from_str(&json).unwrap();
+        assert_eq!(event, back);
+    }
+
+    #[test]
+    fn test_memory_operation_op_serialization() {
+        let ops = vec![
+            MemoryOperationOp::Write,
+            MemoryOperationOp::Clear,
+            MemoryOperationOp::Summarize,
+        ];
+        for o in ops {
+            let json = serde_json::to_string(&o).unwrap();
+            let back: MemoryOperationOp = serde_json::from_str(&json).unwrap();
+            assert_eq!(o, back);
+        }
+    }
+
+    #[test]
+    fn test_loop_on_max_exceeded_serialization() {
+        let variants = vec![
+            LoopOnMaxExceeded::Fail,
+            LoopOnMaxExceeded::UseLast,
+            LoopOnMaxExceeded::Escalate,
+        ];
+        for v in variants {
+            let json = serde_json::to_string(&v).unwrap();
+            let back: LoopOnMaxExceeded = serde_json::from_str(&json).unwrap();
+            assert_eq!(v, back);
+        }
+    }
+
+    #[test]
+    fn test_backoff_type_serialization() {
+        let types = vec![BackoffType::Fixed, BackoffType::Linear, BackoffType::Exponential];
+        for t in types {
+            let json = serde_json::to_string(&t).unwrap();
+            let back: BackoffType = serde_json::from_str(&json).unwrap();
+            assert_eq!(t, back);
+        }
+    }
+
+    #[test]
+    fn test_rate_limit_on_limit_exceeded_serialization() {
+        let variants = vec![
+            RateLimitOnLimitExceeded::Queue,
+            RateLimitOnLimitExceeded::Fail,
+            RateLimitOnLimitExceeded::Warn,
+        ];
+        for v in variants {
+            let json = serde_json::to_string(&v).unwrap();
+            let back: RateLimitOnLimitExceeded = serde_json::from_str(&json).unwrap();
+            assert_eq!(v, back);
+        }
+    }
+
+    #[test]
+    fn test_cache_scope_serialization() {
+        let scopes = vec![CacheScope::Agent, CacheScope::Session, CacheScope::User];
+        for s in scopes {
+            let json = serde_json::to_string(&s).unwrap();
+            let back: CacheScope = serde_json::from_str(&json).unwrap();
+            assert_eq!(s, back);
+        }
+    }
+
+    #[test]
+    fn test_workspace_cleanup_on_serialization() {
+        let variants = vec![
+            WorkspaceCleanupOn::Delete,
+            WorkspaceCleanupOn::Archive,
+            WorkspaceCleanupOn::Preserve,
+        ];
+        for v in variants {
+            let json = serde_json::to_string(&v).unwrap();
+            let back: WorkspaceCleanupOn = serde_json::from_str(&json).unwrap();
+            assert_eq!(v, back);
+        }
+    }
+
+    #[test]
+    fn test_agent_trust_level_serialization() {
+        let levels = vec![
+            AgentTrustLevel::Sandboxed,
+            AgentTrustLevel::Supervised,
+            AgentTrustLevel::Autonomous,
+        ];
+        for l in levels {
+            let json = serde_json::to_string(&l).unwrap();
+            let back: AgentTrustLevel = serde_json::from_str(&json).unwrap();
+            assert_eq!(l, back);
+        }
+    }
+
+    #[test]
+    fn test_cost_track_by_serialization() {
+        let variants = vec![
+            CostTrackBy::Invocation,
+            CostTrackBy::Session,
+            CostTrackBy::User,
+            CostTrackBy::Day,
+        ];
+        for v in variants {
+            let json = serde_json::to_string(&v).unwrap();
+            let back: CostTrackBy = serde_json::from_str(&json).unwrap();
+            assert_eq!(v, back);
+        }
+    }
+
+    #[test]
+    fn test_interrupt_on_timeout_serialization() {
+        let variants = vec![
+            InterruptOnTimeout::Fail,
+            InterruptOnTimeout::Approve,
+            InterruptOnTimeout::Deny,
+        ];
+        for v in variants {
+            let json = serde_json::to_string(&v).unwrap();
+            let back: InterruptOnTimeout = serde_json::from_str(&json).unwrap();
+            assert_eq!(v, back);
+        }
+    }
+
+    #[test]
+    fn test_sandbox_network_serialization() {
+        let variants = vec![SandboxNetwork::None, SandboxNetwork::Host, SandboxNetwork::Bridge];
+        for v in variants {
+            let json = serde_json::to_string(&v).unwrap();
+            let back: SandboxNetwork = serde_json::from_str(&json).unwrap();
+            assert_eq!(v, back);
+        }
+    }
+
+    #[test]
+    fn test_artifact_scope_serialization() {
+        let scopes = vec![ArtifactScope::Session, ArtifactScope::User, ArtifactScope::Agent];
+        for s in scopes {
+            let json = serde_json::to_string(&s).unwrap();
+            let back: ArtifactScope = serde_json::from_str(&json).unwrap();
+            assert_eq!(s, back);
+        }
+    }
+
+    #[test]
+    fn test_guardrail_rail_default() {
+        let rail = GuardrailRail::default();
+        assert_eq!(rail.id, "");
+        assert_eq!(rail.provider, "");
+        assert_eq!(rail.policy_ref, "");
+        assert!(rail.mode.is_none());
+        assert!(rail.categories.is_none());
+        assert!(rail.threshold.is_none());
+    }
+
+    #[test]
+    fn test_guardrails_default() {
+        let g = Guardrails::default();
+        assert!(g.input.is_empty());
+        assert!(g.output.is_empty());
+        assert!(g.on_violation.is_none());
+        assert!(g.interrupts.is_none());
+        assert!(g.cost.is_none());
+        assert!(g.agent_trust.is_none());
+    }
+
+    #[test]
+    fn test_runtime_default() {
+        let r = Runtime::default();
+        assert!(r.execution.is_empty());
+        assert!(r.models.is_none());
+        assert!(r.adapter_hints.is_none());
+    }
+
+    #[test]
+    fn test_override_entry_with_explicit_op() {
+        let entry: OverrideEntry = serde_json::from_str(r#"{"path": "/id", "value": "x", "op": "append"}"#).unwrap();
+        assert_eq!(entry.op, "append");
+        assert_eq!(entry.path, "/id");
+    }
+
+    #[test]
+    fn test_memory_untagged_deserialization_legacy() {
+        let json = r#"{"type": "buffer", "max_history": 10}"#;
+        let memory: Memory = serde_json::from_str(json).unwrap();
+        assert!(matches!(memory, Memory::Legacy(_)));
+    }
+
+    #[test]
+    fn test_memory_untagged_deserialization_structured() {
+        let json = r#"{"stores": []}"#;
+        let memory: Memory = serde_json::from_str(json).unwrap();
+        assert!(matches!(memory, Memory::Structured(_)));
+    }
+
+    #[test]
+    fn test_model_structured_output_default() {
+        let so = ModelStructuredOutput::default();
+        assert!(so.format.is_none());
+        assert!(so.schema.is_none());
+        assert!(so.schema_ref.is_none());
+    }
+
+    #[test]
+    fn test_full_adp_deserialization() {
+        use std::io::Write;
+        let mut tmp = tempfile::NamedTempFile::new().unwrap();
+        write!(tmp, r#"adp_version: "0.3.0"
+id: "full-agent"
+conformance_class: "full"
+runtime:
+  execution:
+    - id: "r1"
+      backend: "python"
+      entrypoint: "agent.main:app"
+  models:
+    - id: "gpt4"
+      provider: "openai"
+      model: "gpt-4"
+      temperature: 0.7
+      max_tokens: 4096
+      top_p: 0.9
+      seed: 42
+      timeout_ms: 30000
+      use_streaming_api: true
+      stop_sequences: ["END"]
+      frequency_penalty: 0.5
+      presence_penalty: 0.3
+flow:
+  id: "full.flow"
+  graph:
+    nodes:
+      - id: "n1"
+        kind: "input"
+    edges: []
+    start_nodes: ["n1"]
+    end_nodes: ["n1"]
+evaluation:
+  suites:
+    - id: "s1"
+      metrics:
+        - id: "m1"
+          type: "deterministic"
+          function: "noop"
+          scoring: "boolean"
+          threshold: true
+telemetry:
+  endpoint: "http://otel-collector:4317"
+  protocol: "grpc"
+  service_name: "my-agent"
+  sampling_rate: 0.5
+  required_attributes:
+    - "gen_ai.request.model"
+"#).unwrap();
+        let adp = load_adp(tmp.path().to_str().unwrap()).unwrap();
+        assert_eq!(adp.id, "full-agent");
+        assert_eq!(adp.adp_version, "0.3.0");
+        assert_eq!(adp.conformance_class, Some("full".to_string()));
+        let models = adp.runtime.models.unwrap();
+        assert_eq!(models[0].id, "gpt4");
+        assert_eq!(models[0].temperature, Some(0.7));
+        assert_eq!(models[0].top_p, Some(0.9));
+        assert_eq!(models[0].seed, Some(42));
+        let tel = adp.telemetry.unwrap();
+        assert_eq!(tel.endpoint, Some("http://otel-collector:4317".to_string()));
+        assert_eq!(tel.required_attributes, vec!["gen_ai.request.model"]);
+    }
 }
