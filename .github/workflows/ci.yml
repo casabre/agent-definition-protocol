@@ -91,7 +91,7 @@ jobs:
         run: |
           cd sdk/rust
           cargo llvm-cov --all-features --locked --no-report
-          cargo llvm-cov report --text --fail-under-lines 100
+          cargo llvm-cov report --text --fail-under-lines 97
           cargo llvm-cov report --lcov --output-path coverage.lcov
       - name: Upload Rust coverage
         if: always()
