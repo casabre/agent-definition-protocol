@@ -11,7 +11,6 @@ import (
 	"testing"
 )
 
-
 const validAgentYAML = `adp_version: "0.1.0"
 id: "agent.test"
 runtime:
@@ -60,9 +59,9 @@ func buildSourceWithMetadata(dir string) error {
 		return err
 	}
 	metadata := map[string]string{
-		"agent_id":      "agent.test",
-		"agent_version": "1.0.0",
-		"spec_version":  "0.1.0",
+		"agent_id":        "agent.test",
+		"agent_version":   "1.0.0",
+		"spec_version":    "0.1.0",
 		"build_timestamp": "2024-01-15T10:30:00Z",
 	}
 	metadataJSON, _ := json.Marshal(metadata)
@@ -106,7 +105,7 @@ func TestOCILayoutStructure(t *testing.T) {
 	if err := CreateADPKG(tmp, out); err != nil {
 		t.Fatalf("create failed: %v", err)
 	}
-	
+
 	// Verify oci-layout content
 	layoutPath := filepath.Join(out, "oci-layout")
 	layoutData, err := os.ReadFile(layoutPath)
@@ -120,7 +119,7 @@ func TestOCILayoutStructure(t *testing.T) {
 	if layout["imageLayoutVersion"] != "1.0.0" {
 		t.Errorf("expected imageLayoutVersion '1.0.0', got '%v'", layout["imageLayoutVersion"])
 	}
-	
+
 	// Verify index.json structure
 	indexPath := filepath.Join(out, "index.json")
 	indexData, err := os.ReadFile(indexPath)
@@ -157,7 +156,7 @@ func TestPackageContainsRequiredFiles(t *testing.T) {
 	if err := CreateADPKG(tmp, out); err != nil {
 		t.Fatalf("create failed: %v", err)
 	}
-	
+
 	// Read index and manifest
 	indexPath := filepath.Join(out, "index.json")
 	indexData, _ := os.ReadFile(indexPath)
@@ -165,7 +164,7 @@ func TestPackageContainsRequiredFiles(t *testing.T) {
 	json.Unmarshal(indexData, &index)
 	manifestDesc := index["manifests"].([]interface{})[0].(map[string]interface{})
 	manifestDigest := manifestDesc["digest"].(string)
-	
+
 	// Extract digest hash (format: "sha256:hex" -> "sha256/hex")
 	digestParts := strings.Split(manifestDigest, ":")
 	if len(digestParts) != 2 {
@@ -175,12 +174,12 @@ func TestPackageContainsRequiredFiles(t *testing.T) {
 	if _, err := os.Stat(manifestPath); err != nil {
 		t.Fatalf("manifest blob should exist: %v", err)
 	}
-	
+
 	// Read manifest
 	manifestData, _ := os.ReadFile(manifestPath)
 	var manifest map[string]interface{}
 	json.Unmarshal(manifestData, &manifest)
-	
+
 	// Extract config digest hash
 	configDesc := manifest["config"].(map[string]interface{})
 	configDigest := configDesc["digest"].(string)
@@ -192,7 +191,7 @@ func TestPackageContainsRequiredFiles(t *testing.T) {
 	if _, err := os.Stat(configPath); err != nil {
 		t.Fatalf("config blob should exist: %v", err)
 	}
-	
+
 	// Verify config content
 	configData, _ := os.ReadFile(configPath)
 	var config map[string]interface{}
@@ -218,7 +217,7 @@ func TestPackageWithMetadata(t *testing.T) {
 	if err := CreateADPKG(tmp, out); err != nil {
 		t.Fatalf("create failed: %v", err)
 	}
-	
+
 	// Verify package was created successfully
 	if _, err := os.Stat(filepath.Join(out, "index.json")); err != nil {
 		t.Fatalf("missing index.json: %v", err)
@@ -231,7 +230,7 @@ func TestPackageErrorHandling(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmp)
-	
+
 	// Missing adp/agent.yaml
 	out := filepath.Join(tmp, "oci")
 	if err := CreateADPKG(tmp, out); err == nil {
@@ -245,7 +244,7 @@ func TestOpenADPKG(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmp)
-	
+
 	if err := buildSource(tmp); err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +252,7 @@ func TestOpenADPKG(t *testing.T) {
 	if err := CreateADPKG(tmp, out); err != nil {
 		t.Fatalf("create failed: %v", err)
 	}
-	
+
 	// Test OpenADPKG
 	pkg, err := OpenADPKG(out)
 	if err != nil {
@@ -273,7 +272,7 @@ func TestCreateADPKGErrorPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmp)
-	
+
 	// Test invalid ADP (validation failure)
 	adpDir := filepath.Join(tmp, "adp")
 	if err := os.MkdirAll(adpDir, 0o755); err != nil {
@@ -288,7 +287,7 @@ func TestCreateADPKGErrorPaths(t *testing.T) {
 	if err := CreateADPKG(tmp, out); err == nil {
 		t.Fatal("expected validation error for empty execution")
 	}
-	
+
 	// Test error from writeBlob (config blob write failure)
 	// This is hard to trigger, but we can test the path where os.ReadFile fails on layer.tar
 	// Actually, we already test missing agent.yaml, so let's test the path where createTar fails
@@ -307,7 +306,7 @@ func TestCreateADPKGErrorPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.Chmod(noReadFile, 0o644)
-	
+
 	out2 := filepath.Join(tmp, "oci2")
 	// This may or may not fail depending on system, but we test the path
 	if err := CreateADPKG(badSrcDir, out2); err != nil {
@@ -322,7 +321,7 @@ func TestWriteBlobErrorPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmp)
-	
+
 	// Test writeBlob with invalid digest format (should still work but test the path)
 	// Actually, writeBlob doesn't validate digest format, so we need to test error from MkdirAll
 	// Create a read-only directory to trigger MkdirAll error
@@ -331,14 +330,14 @@ func TestWriteBlobErrorPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.Chmod(readOnlyDir, 0o755) // Restore permissions for cleanup
-	
+
 	// Try to write blob in read-only parent (this should fail)
 	err = writeBlob(readOnlyDir, "sha256:abc123", []byte("test"))
 	if err == nil {
 		// On some systems, this might not fail, so we just verify the function exists
 		t.Log("writeBlob error path not triggered (may be system-dependent)")
 	}
-	
+
 	// Test writeBlob with WriteFile error - create a file that blocks directory creation
 	// Actually, this is hard to trigger reliably, so we test the normal path
 	// Test that writeBlob works correctly
@@ -365,13 +364,13 @@ func TestCreateTarErrorPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmp)
-	
+
 	// Test createTar with non-existent source directory (covers filepath.Walk error path, line 134-135)
 	dest := filepath.Join(tmp, "test.tar")
 	if err := createTar(dest, filepath.Join(tmp, "nonexistent")); err == nil {
 		t.Fatal("expected error for non-existent source directory")
 	}
-	
+
 	// Test createTar with file that can't be read (covers line 144-146)
 	if err := buildSource(tmp); err != nil {
 		t.Fatal(err)
@@ -381,7 +380,7 @@ func TestCreateTarErrorPaths(t *testing.T) {
 	if err := os.WriteFile(noReadFile, []byte("test"), 0o000); err != nil {
 		t.Fatal(err)
 	}
-	
+
 	dest2 := filepath.Join(tmp, "test2.tar")
 	// This should fail when trying to read the file (covers line 144-146)
 	if err := createTar(dest2, tmp); err == nil {
@@ -389,18 +388,18 @@ func TestCreateTarErrorPaths(t *testing.T) {
 	} else {
 		t.Logf("createTar failed as expected: %v", err)
 	}
-	
+
 	// Remove the unreadable file immediately to avoid interfering with subsequent tests
 	os.Chmod(noReadFile, 0o644) // Restore permissions first
 	os.Remove(noReadFile)       // Then remove it
-	
+
 	// Test filepath.Rel error path (line 140-142) - very hard to trigger
 	// Test tar.FileInfoHeader error (line 148-150) - hard to trigger
 	// Test tw.WriteHeader error (line 154-156) - hard to trigger
 	// Test tw.Write error (line 157) - hard to trigger
 	// These are edge cases that may not be easily testable without mocking
 	// For now, we test the normal path which covers most cases
-	
+
 	// Test normal path to ensure all code paths are exercised
 	// Rebuild source in a clean state
 	if err := buildSource(tmp); err != nil {
@@ -424,23 +423,23 @@ func TestCreateADPKGReadFileError(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmp)
-	
+
 	if err := buildSource(tmp); err != nil {
 		t.Fatal(err)
 	}
 	outDir := filepath.Join(tmp, "oci")
-	
+
 	// Create a mock scenario where createTar succeeds but the file becomes unreadable
 	// Actually, we can't easily do this without modifying CreateADPKG
 	// Instead, let's test the path where the layer.tar file doesn't exist after createTar
 	// This is hard to trigger, so we'll test a scenario where createTar creates a file
 	// but then it gets deleted before ReadFile
-	
+
 	// Create the package normally first to ensure createTar works
 	if err := CreateADPKG(tmp, outDir); err != nil {
 		t.Fatalf("CreateADPKG should succeed: %v", err)
 	}
-	
+
 	// Now test the error path by trying to read a non-existent file
 	_, err = os.ReadFile(filepath.Join(tmp, "nonexistent.tar"))
 	if err == nil {
@@ -456,14 +455,14 @@ func TestCreateADPKGWriteFileError(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmp)
-	
+
 	// Create read-only directory
 	readOnlyDir := filepath.Join(tmp, "readonly")
 	if err := os.MkdirAll(readOnlyDir, 0o555); err != nil {
 		t.Fatal(err)
 	}
 	defer os.Chmod(readOnlyDir, 0o755)
-	
+
 	if err := buildSource(tmp); err != nil {
 		t.Fatal(err)
 	}
@@ -736,7 +735,7 @@ func TestCreateADPKGV0_1_0(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmp)
-	
+
 	adpDir := filepath.Join(tmp, "adp")
 	if err := os.MkdirAll(adpDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -772,12 +771,12 @@ evaluation:
 	if err := os.WriteFile(filepath.Join(adpDir, "agent.yaml"), []byte(v0_1_0_yaml), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	
+
 	out := filepath.Join(tmp, "oci")
 	if err := CreateADPKG(tmp, out); err != nil {
 		t.Fatalf("create failed: %v", err)
 	}
-	
+
 	// Verify package was created
 	if _, err := os.Stat(filepath.Join(out, "index.json")); err != nil {
 		t.Fatalf("missing index.json: %v", err)
@@ -1025,8 +1024,8 @@ func TestCreateADPKGWriteFilePaths(t *testing.T) {
 	}
 
 	tests := []struct {
-		name    string
-		failOn  int // 1-based: which WriteFile call to fail
+		name   string
+		failOn int // 1-based: which WriteFile call to fail
 	}{
 		{"config blob write failure", 1},
 		{"layer blob write failure", 2},

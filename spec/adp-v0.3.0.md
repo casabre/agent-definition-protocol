@@ -98,8 +98,8 @@ ADP declares **what** the harness should do; the **runner** implements **how**. 
 All new array fields follow **additive merge** semantics on composition:
 
 - `import`: appends arrays
-- `extends`: deep-merges objects, appends arrays
-- Duplicate IDs: outer/later manifest wins (consistent with RFC 7396)
+- `extends` + local fields: objects deep-merge; id-carrying lists merge by `id` (local entry wins on collision); other lists replace
+- Duplicate IDs: local/later manifest wins
 
 ---
 
@@ -128,6 +128,12 @@ All new array fields follow **additive merge** semantics on composition:
 - `schemas/sandbox.schema.json`
 - `schemas/artifacts.schema.json`
 - `schemas/observability.schema.json`
+
+#### Composition Enhancement
+
+**Id-keyed local field merge** — Local fields in a manifest that uses `extends:` now apply id-keyed merge semantics instead of RFC 7396 array-replace. Objects deep-merge recursively; lists where all local items carry `id` merge by matching id (matched entries patched in-place; unmatched base entries kept; unknown ids appended); lists with any no-id item replace the base list; `null` removes a key. Valid for all `adp_version` values.
+
+See [`adp-v0.3.0-composition.md`](adp-v0.3.0-composition.md) for the full specification.
 
 ---
 

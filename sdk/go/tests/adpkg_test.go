@@ -7,8 +7,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"testing"
 	"strings"
+	"testing"
 
 	sdkadp "github.com/casabre/adp-sdk/adp"
 	"github.com/casabre/adp-sdk/adpkg"

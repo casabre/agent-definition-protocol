@@ -27,7 +27,7 @@ func inMemoryResolver(files map[string]string) Resolver {
 }
 
 // TestResolveADPBasicExtends verifies that a child manifest inherits fields from
-// a base manifest via the extends directive and that local fields win (RFC 7396).
+// a base manifest via the extends directive and that local fields win (id-keyed merge).
 func TestResolveADPBasicExtends(t *testing.T) {
 	baseYAML := `
 adp_version: "0.1.0"
@@ -158,7 +158,7 @@ evaluation:
         - { id: "m2", type: "llm_judge", threshold: 0.9 }
 `
 	files := map[string]string{
-		"main.yaml":        mainYAML,
+		"main.yaml":         mainYAML,
 		"module_evals.yaml": moduleYAML,
 	}
 	resolver := inMemoryResolver(files)
@@ -1833,5 +1833,237 @@ import:
 	// When sections is a scalar string, toStringSlice returns nil → all sections imported.
 	if adp.ID != "str-slice-scalar" {
 		t.Errorf("expected id 'str-slice-scalar', got %q", adp.ID)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Id-keyed merge unit tests
+// ---------------------------------------------------------------------------
+
+func TestApplyPatchObjectDeepMerge(t *testing.T) {
+	base := map[string]interface{}{
+		"a": map[string]interface{}{"x": 1, "y": 2},
+		"b": "keep",
+	}
+	patch := map[string]interface{}{
+		"a": map[string]interface{}{"x": 99},
+	}
+	result := applyPatch(base, patch)
+	a := result["a"].(map[string]interface{})
+	if a["x"] != 99 || a["y"] != 2 || result["b"] != "keep" {
+		t.Errorf("unexpected result: %v", result)
+	}
+}
+
+func TestApplyPatchAddsMissingKey(t *testing.T) {
+	base := map[string]interface{}{"existing": "value"}
+	patch := map[string]interface{}{"new_key": map[string]interface{}{"nested": true}}
+	result := applyPatch(base, patch)
+	if _, ok := result["new_key"]; !ok {
+		t.Error("expected new_key to be added")
+	}
+	if result["existing"] != "value" {
+		t.Error("existing key should be preserved")
+	}
+}
+
+func TestApplyPatchListIDKeyedMatch(t *testing.T) {
+	base := map[string]interface{}{
+		"models": []interface{}{
+			map[string]interface{}{"id": "gpt4", "model": "gpt-4"},
+			map[string]interface{}{"id": "claude", "model": "claude-3"},
+		},
+	}
+	patch := map[string]interface{}{
+		"models": []interface{}{
+			map[string]interface{}{"id": "gpt4", "model": "gpt-4o"},
+		},
+	}
+	result := applyPatch(base, patch)
+	models := result["models"].([]interface{})
+	if len(models) != 2 {
+		t.Fatalf("expected 2 models, got %d", len(models))
+	}
+	m0 := models[0].(map[string]interface{})
+	if m0["model"] != "gpt-4o" {
+		t.Errorf("expected gpt-4o, got %v", m0["model"])
+	}
+	m1 := models[1].(map[string]interface{})
+	if m1["id"] != "claude" {
+		t.Errorf("claude entry should be preserved, got %v", m1)
+	}
+}
+
+func TestApplyPatchListIDKeyedNewEntry(t *testing.T) {
+	base := map[string]interface{}{
+		"models": []interface{}{
+			map[string]interface{}{"id": "gpt4", "model": "gpt-4"},
+		},
+	}
+	patch := map[string]interface{}{
+		"models": []interface{}{
+			map[string]interface{}{"id": "new-model", "model": "llama-3"},
+		},
+	}
+	result := applyPatch(base, patch)
+	models := result["models"].([]interface{})
+	if len(models) != 2 {
+		t.Fatalf("expected 2 models, got %d", len(models))
+	}
+}
+
+func TestApplyPatchListNoIDReplaces(t *testing.T) {
+	base := map[string]interface{}{
+		"tags": []interface{}{"a", "b", "c"},
+	}
+	patch := map[string]interface{}{
+		"tags": []interface{}{"x", "y"},
+	}
+	result := applyPatch(base, patch)
+	tags := result["tags"].([]interface{})
+	if len(tags) != 2 || tags[0] != "x" {
+		t.Errorf("expected [x, y], got %v", tags)
+	}
+}
+
+func TestApplyPatchNullRemovesKey(t *testing.T) {
+	base := map[string]interface{}{"keep": "yes", "remove": "this"}
+	patch := map[string]interface{}{"remove": nil}
+	result := applyPatch(base, patch)
+	if _, ok := result["remove"]; ok {
+		t.Error("'remove' key should have been deleted")
+	}
+	if result["keep"] != "yes" {
+		t.Error("'keep' should be preserved")
+	}
+}
+
+func TestExtendsLocalFieldAndOverride(t *testing.T) {
+	// Local field (id-keyed merge) applied before override; override wins on same key.
+	baseYAML := `adp_version: "0.3.0"
+id: base
+runtime:
+  execution:
+    - id: py
+      backend: python
+      entrypoint: a:b
+telemetry:
+  service_name: original
+  protocol: grpc
+`
+	manifest := `adp_version: "0.3.0"
+id: child
+extends: "base.yaml"
+telemetry:
+  service_name: local-value
+overrides:
+  - path: /telemetry/service_name
+    value: overridden
+    op: set
+`
+	adp, errs := ResolveADP("child.yaml", inMemoryResolver(map[string]string{
+		"base.yaml":  baseYAML,
+		"child.yaml": manifest,
+	}))
+	if len(errs) != 0 {
+		t.Fatalf("unexpected errors: %v", errs)
+	}
+	if adp.Telemetry == nil || adp.Telemetry.ServiceName != "overridden" {
+		t.Errorf("expected 'overridden', got %v", adp.Telemetry)
+	}
+	if adp.Telemetry.Protocol != "grpc" {
+		t.Errorf("protocol should be inherited from base, got %q", adp.Telemetry.Protocol)
+	}
+}
+
+func TestExtendsLocalFieldDifferentKeys(t *testing.T) {
+	// Local field on one key + override on another; both applied correctly.
+	baseYAML := `adp_version: "0.3.0"
+id: base
+runtime:
+  execution:
+    - id: py
+      backend: python
+      entrypoint: a:b
+telemetry:
+  service_name: base-name
+  protocol: grpc
+`
+	manifest := `adp_version: "0.3.0"
+id: child
+extends: "base.yaml"
+telemetry:
+  service_name: local-name
+overrides:
+  - path: /telemetry/protocol
+    value: http/protobuf
+    op: set
+`
+	adp, errs := ResolveADP("child.yaml", inMemoryResolver(map[string]string{
+		"base.yaml":  baseYAML,
+		"child.yaml": manifest,
+	}))
+	if len(errs) != 0 {
+		t.Fatalf("unexpected errors: %v", errs)
+	}
+	if adp.Telemetry == nil {
+		t.Fatal("telemetry should not be nil")
+	}
+	if adp.Telemetry.ServiceName != "local-name" {
+		t.Errorf("expected 'local-name', got %q", adp.Telemetry.ServiceName)
+	}
+	if adp.Telemetry.Protocol != "http/protobuf" {
+		t.Errorf("expected 'http/protobuf', got %q", adp.Telemetry.Protocol)
+	}
+}
+
+func TestExtendsIdListFullPipeline(t *testing.T) {
+	// Extends + local id-list + import + overrides: all active, correct result.
+	baseYAML := `adp_version: "0.3.0"
+id: base
+runtime:
+  execution:
+    - id: py
+      backend: python
+      entrypoint: a:b
+telemetry:
+  service_name: base-svc
+  protocol: grpc
+`
+	moduleYAML := `id: extra
+evaluation:
+  suites:
+    - id: extra-suite
+      description: extra
+`
+	manifest := `adp_version: "0.3.0"
+id: child
+extends: "base.yaml"
+import:
+  - id: extra
+    from: "module.yaml"
+telemetry:
+  service_name: local-svc
+overrides:
+  - path: /telemetry/protocol
+    value: http/protobuf
+    op: set
+`
+	adp, errs := ResolveADP("child.yaml", inMemoryResolver(map[string]string{
+		"base.yaml":   baseYAML,
+		"module.yaml": moduleYAML,
+		"child.yaml":  manifest,
+	}))
+	if len(errs) != 0 {
+		t.Fatalf("unexpected errors: %v", errs)
+	}
+	if adp.Telemetry == nil {
+		t.Fatal("telemetry should not be nil")
+	}
+	if adp.Telemetry.ServiceName != "local-svc" {
+		t.Errorf("expected 'local-svc', got %q", adp.Telemetry.ServiceName)
+	}
+	if adp.Telemetry.Protocol != "http/protobuf" {
+		t.Errorf("expected 'http/protobuf', got %q", adp.Telemetry.Protocol)
 	}
 }

@@ -57,17 +57,18 @@ function _resolveManifest(
     const absUri = _resolveUri(extendsUri, baseUri);
     const baseRaw = _loadUri(absUri, resolver);
     const baseResolved = _resolveManifest(baseRaw, absUri, newSeen, depth + 1, resolver);
-    merged = _deepMerge(merged, baseResolved);
+    merged = _applyPatch(merged, baseResolved);
   }
 
-  // Apply local fields over the extended base (RFC 7396 — local wins, arrays replace)
+  // Apply local fields using id-keyed merge semantics:
+  // objects deep-merge; id-carrying lists merge by id; other lists replace.
   const local: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(data)) {
     if (k !== "extends" && k !== "import" && k !== "overrides") {
       local[k] = v;
     }
   }
-  merged = _deepMerge(merged, local);
+  merged = _applyPatch(merged, local);
 
   // Apply imports additively AFTER local
   const imports = data["import"];
@@ -89,7 +90,7 @@ function _resolveManifest(
     }
   }
 
-  // Apply overrides
+  // Apply overrides (step 4 — final word)
   const overrides = data["overrides"];
   if (Array.isArray(overrides)) {
     for (const override of overrides as Array<Record<string, unknown>>) {
@@ -100,12 +101,12 @@ function _resolveManifest(
   return merged;
 }
 
-function _deepMerge(
+function _applyPatch(
   base: Record<string, unknown>,
-  overlay: Record<string, unknown>
+  patch: Record<string, unknown>
 ): Record<string, unknown> {
   const result: Record<string, unknown> = Object.assign({}, base);
-  for (const [key, val] of Object.entries(overlay)) {
+  for (const [key, val] of Object.entries(patch)) {
     if (val === null) {
       delete result[key];
     } else if (
@@ -115,15 +116,61 @@ function _deepMerge(
       !Array.isArray(result[key]) &&
       result[key] !== null
     ) {
-      result[key] = _deepMerge(
+      result[key] = _applyPatch(
         result[key] as Record<string, unknown>,
         val as Record<string, unknown>
       );
+    } else if (Array.isArray(val) && Array.isArray(result[key])) {
+      if (_allHaveID(val)) {
+        result[key] = _idKeyedMerge(result[key] as unknown[], val);
+      } else {
+        result[key] = _deepCopy(val);
+      }
     } else {
       result[key] = _deepCopy(val);
     }
   }
   return result;
+}
+
+function _idKeyedMerge(baseList: unknown[], patchList: unknown[]): unknown[] {
+  const result: unknown[] = baseList.map((item) => _deepCopy(item));
+  const index = new Map<string, number>();
+  result.forEach((item, i) => {
+    if (typeof item === "object" && item !== null && !Array.isArray(item)) {
+      const id = (item as Record<string, unknown>)["id"];
+      if (typeof id === "string") index.set(id, i);
+    }
+  });
+  for (const patchItem of patchList) {
+    if (typeof patchItem === "object" && patchItem !== null && !Array.isArray(patchItem)) {
+      const id = (patchItem as Record<string, unknown>)["id"];
+      if (typeof id === "string" && index.has(id)) {
+        result[index.get(id)!] = _applyPatch(
+          result[index.get(id)!] as Record<string, unknown>,
+          patchItem as Record<string, unknown>
+        );
+      } else {
+        result.push(_deepCopy(patchItem));
+      }
+    /* c8 ignore next 4 */
+    } else {
+      result.push(_deepCopy(patchItem));
+    }
+  }
+  return result;
+}
+
+function _allHaveID(list: unknown[]): boolean {
+  /* c8 ignore next 2 */
+  if (list.length === 0) return false;
+  return list.every(
+    (item) =>
+      typeof item === "object" &&
+      item !== null &&
+      !Array.isArray(item) &&
+      "id" in (item as Record<string, unknown>)
+  );
 }
 
 function _additiveMerge(

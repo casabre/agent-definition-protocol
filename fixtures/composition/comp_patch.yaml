@@ -1,0 +1,12 @@
+adp_version: "0.3.0"
+id: "fixture.comp.id-keyed"
+extends: "./comp_base.yaml"
+
+# Local fields use id-keyed merge: gpt4 entry updated in-place, telemetry deep-merged.
+runtime:
+  models:
+    - id: "gpt4"
+      model: "gpt-4o"
+
+telemetry:
+  service_name: "fixture-patched"

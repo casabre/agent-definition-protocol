@@ -1,12 +1,14 @@
 adp_version: "0.2.0"
 id: "agent.acme.billing"
-description: "Production overlay: upgrades model to gpt-4o, sets APP_ENV=prod."
+description: "Production overlay: upgrades model to gpt-4o, sets prod telemetry service name."
 extends: "./billing-variant.yaml"
 
-overrides:
-  - path: "/runtime/models/0/model"
-    value: "gpt-4o"
-    op: "set"
-  - path: "/telemetry/service_name"
-    value: "acme-billing-prod"
-    op: "set"
+# Local fields use id-keyed merge semantics: only the changed entry is needed.
+# The gpt4 entry is matched by id and updated in-place; all other base entries are kept.
+runtime:
+  models:
+    - id: "gpt4"
+      model: "gpt-4o"
+
+telemetry:
+  service_name: "acme-billing-prod"

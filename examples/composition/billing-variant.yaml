@@ -6,7 +6,7 @@ description: >
   Adds billing-specific flow and tools.
 extends: "./base-agent.yaml"
 
-# evaluation key intentionally omitted — inherits base safety evaluation via RFC 7396.
+# evaluation key intentionally omitted — inherits base safety evaluation from extends chain.
 # DO NOT add `evaluation: {}` — that would replace the inherited evaluation with an empty object.
 
 flow:

@@ -2731,6 +2731,81 @@ function testValidationAS3RefPathTraversal() {
   );
 }
 
+function testLocalIdKeyedListNewEntry() {
+  // Local field: id-carrying list with unknown id → entry appended to base list.
+  const baseManifest = `
+adp_version: "0.3.0"
+id: "base"
+runtime:
+  execution:
+    - { id: "py", backend: "python", entrypoint: "app:main" }
+  models:
+    - id: gpt4
+      provider: openai
+      model: gpt-4
+flow:${_VALID_FLOW_YAML}
+evaluation:${_VALID_EVAL_YAML}
+`;
+  const childManifest = `
+adp_version: "0.3.0"
+id: "child"
+extends: "base"
+runtime:
+  models:
+    - id: llama
+      provider: meta
+      model: llama-3
+`;
+  const resolver = (uri: string) =>
+    uri.endsWith("base") || uri.endsWith("base.yaml") ? baseManifest : childManifest;
+  const adp = resolveAdp("mem://child", resolver) as any;
+  /* c8 ignore next */
+  const models = adp.runtime?.models ?? [];
+  assert.strictEqual(models.length, 2, "new id should be appended");
+  assert.ok(models.some((m: any) => m.id === "gpt4"), "gpt4 should be present");
+  assert.ok(models.some((m: any) => m.id === "llama"), "llama should be appended");
+}
+
+function testLocalIdKeyedListMatch() {
+  // Local field: id-carrying list where id matches base entry → updated in-place, others kept.
+  const baseManifest = `
+adp_version: "0.3.0"
+id: "base"
+runtime:
+  execution:
+    - { id: "py", backend: "python", entrypoint: "app:main" }
+  models:
+    - id: gpt4
+      provider: openai
+      model: gpt-4
+    - id: claude
+      provider: anthropic
+      model: claude-3
+flow:${_VALID_FLOW_YAML}
+evaluation:${_VALID_EVAL_YAML}
+`;
+  const childManifest = `
+adp_version: "0.3.0"
+id: "child"
+extends: "base"
+runtime:
+  models:
+    - id: gpt4
+      model: gpt-4o
+`;
+  const resolver = (uri: string) =>
+    uri.endsWith("base") || uri.endsWith("base.yaml") ? baseManifest : childManifest;
+  const adp = resolveAdp("mem://child", resolver) as any;
+  /* c8 ignore next */
+  const models = adp.runtime?.models ?? [];
+  assert.strictEqual(models.length, 2, "both entries should be present");
+  const gpt4 = models.find((m: any) => m.id === "gpt4");
+  assert.strictEqual(gpt4?.model, "gpt-4o", "gpt4 model should be updated");
+  assert.strictEqual(gpt4?.provider, "openai", "gpt4 provider should be inherited");
+  const claude = models.find((m: any) => m.id === "claude");
+  assert.strictEqual(claude?.model, "claude-3", "claude should be unchanged");
+}
+
 function testCompositionMemUriNoPath() {
   // Base URI is "mem://nopath" (no path component) → schemeMatch[2] = "" → basePath = "/" (line 224-225)
   // "mem://nopath" → _resolveUri("base", "mem://nopath")
@@ -2949,6 +3024,11 @@ evaluation:${_VALID_EVAL_YAML}
   testCreatePackageThrowsOnInvalidAdp();
   testInspectAndVerifyPackage();
   testVerifyPackageMissingBlob();
+
+  // Id-keyed merge: new entry appended (covers _idKeyedMerge append branch)
+  testLocalIdKeyedListNewEntry();
+  // Id-keyed merge: matched entry updated in-place (covers _idKeyedMerge match branch)
+  testLocalIdKeyedListMatch();
 
   // New async evaluator coverage tests
   const p13 = testScriptEvaluatorJSScriptRef();

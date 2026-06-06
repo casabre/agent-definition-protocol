@@ -798,7 +798,7 @@ type ADP struct {
 	Evaluation       interface{}     `yaml:"evaluation"               json:"evaluation"`
 	Extends          string          `yaml:"extends,omitempty"        json:"extends,omitempty"`
 	Imports          []ImportEntry   `yaml:"import,omitempty"         json:"import,omitempty"`
-	Overrides        []OverrideEntry `yaml:"overrides,omitempty"      json:"overrides,omitempty"`
+	Overrides        []OverrideEntry        `yaml:"overrides,omitempty"      json:"overrides,omitempty"`
 	Guardrails       *Guardrails     `yaml:"guardrails,omitempty"     json:"guardrails,omitempty"`
 	Telemetry        *Telemetry      `yaml:"telemetry,omitempty"      json:"telemetry,omitempty"`
 	Tools            *Tools          `yaml:"tools,omitempty"          json:"tools,omitempty"`

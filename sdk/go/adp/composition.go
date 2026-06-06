@@ -100,7 +100,8 @@ func resolveManifest(
 		}
 	}
 
-	// Step 2: Apply local fields (everything except extends/import/overrides) over base.
+	// Step 2: Apply local fields using id-keyed merge semantics:
+	// objects deep-merge; id-carrying lists merge by id; other lists replace.
 	local := map[string]interface{}{}
 	for k, v := range data {
 		if k == "extends" || k == "import" || k == "overrides" {
@@ -108,7 +109,7 @@ func resolveManifest(
 		}
 		local[k] = v
 	}
-	merged = deepMerge(merged, local)
+	merged = applyPatch(merged, local)
 
 	// Step 3: Additively merge import entries.
 	if importsRaw, ok := data["import"]; ok {
@@ -211,6 +212,89 @@ func additiveMerge(base, module map[string]interface{}) map[string]interface{} {
 		}
 	}
 	return result
+}
+
+// applyPatch applies a structural patch: objects deep-merge; id-keyed lists merge by id; other lists replace.
+func applyPatch(base, patch map[string]interface{}) map[string]interface{} {
+	result := shallowCopy(base)
+	for k, v := range patch {
+		if v == nil {
+			delete(result, k)
+		} else if patchMap, ok := v.(map[string]interface{}); ok {
+			if baseMap, ok := result[k].(map[string]interface{}); ok {
+				result[k] = applyPatch(baseMap, patchMap)
+			} else {
+				result[k] = deepCopyValue(v)
+			}
+		} else if patchList, ok := v.([]interface{}); ok {
+			if baseList, ok := result[k].([]interface{}); ok {
+				if allHaveID(patchList) {
+					result[k] = idKeyedMerge(baseList, patchList)
+				} else {
+					result[k] = deepCopyValue(v)
+				}
+			} else {
+				result[k] = deepCopyValue(v)
+			}
+		} else {
+			result[k] = deepCopyValue(v)
+		}
+	}
+	return result
+}
+
+// idKeyedMerge merges two lists by "id" field. Matched entries are deep-patched;
+// unknown patch ids are appended; unmatched base entries are kept.
+func idKeyedMerge(baseList, patchList []interface{}) []interface{} {
+	result := make([]interface{}, len(baseList))
+	for i, item := range baseList {
+		result[i] = deepCopyValue(item)
+	}
+	index := map[string]int{}
+	for i, item := range result {
+		if m, ok := item.(map[string]interface{}); ok {
+			if id, ok := m["id"].(string); ok {
+				index[id] = i
+			}
+		}
+	}
+	for _, patchItem := range patchList {
+		patchMap, ok := patchItem.(map[string]interface{})
+		if !ok {
+			result = append(result, deepCopyValue(patchItem))
+			continue
+		}
+		id, hasID := patchMap["id"].(string)
+		if !hasID {
+			result = append(result, deepCopyValue(patchItem))
+			continue
+		}
+		if idx, exists := index[id]; exists {
+			if baseEntry, ok := result[idx].(map[string]interface{}); ok {
+				result[idx] = applyPatch(baseEntry, patchMap)
+			}
+		} else {
+			result = append(result, deepCopyValue(patchItem))
+		}
+	}
+	return result
+}
+
+// allHaveID returns true iff the list is non-empty and every element is a map with an "id" key.
+func allHaveID(list []interface{}) bool {
+	if len(list) == 0 {
+		return false
+	}
+	for _, item := range list {
+		m, ok := item.(map[string]interface{})
+		if !ok {
+			return false
+		}
+		if _, hasID := m["id"]; !hasID {
+			return false
+		}
+	}
+	return true
 }
 
 // applyOverride applies a single override entry using JSON Pointer–style paths.

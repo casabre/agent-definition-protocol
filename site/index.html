@@ -904,6 +904,33 @@
       font-style: italic;
     }
 
+    /* ─── Composition ──────────────────────────────────────────── */
+    #composition { background: var(--bg); }
+
+    .comp-split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      align-items: start;
+      margin-top: 3rem;
+    }
+
+    .comp-caption {
+      text-align: center;
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-top: 1.75rem;
+      max-width: 620px;
+      margin-left: auto;
+      margin-right: auto;
+      line-height: 1.65;
+      font-style: italic;
+    }
+
+    @media (max-width: 900px) {
+      .comp-split { grid-template-columns: 1fr; }
+    }
+
     /* ─── Compliance lead sentence ──────────────────────────── */
     .compliance-lead {
       font-size: 0.95rem;
@@ -1112,7 +1139,7 @@
         <ul class="check-list">
           <li><span class="check-mark" aria-hidden="true">✓</span> JSON Schema validation — 6 schemas hosted on GitHub Pages</li>
           <li><span class="check-mark" aria-hidden="true">✓</span> OCI packaging via ADPKG — pack and unpack agents as artifacts</li>
-          <li><span class="check-mark" aria-hidden="true">✓</span> Composition: <code style="font-family:var(--mono);font-size:0.8em;color:var(--sky)">extends</code>, <code style="font-family:var(--mono);font-size:0.8em;color:var(--sky)">import</code>, <code style="font-family:var(--mono);font-size:0.8em;color:var(--sky)">overrides</code> across all 4 SDKs</li>
+          <li><span class="check-mark" aria-hidden="true">✓</span> values.yaml-style composition: <code style="font-family:var(--mono);font-size:0.8em;color:var(--sky)">extends</code> with id-keyed inheritance, <code style="font-family:var(--mono);font-size:0.8em;color:var(--sky)">import</code>, <code style="font-family:var(--mono);font-size:0.8em;color:var(--sky)">overrides</code> across all 4 SDKs</li>
           <li><span class="check-mark" aria-hidden="true">✓</span> 8-scenario conformance harness — CI dry-run mode included</li>
           <li><span class="check-mark" aria-hidden="true">✓</span> GDPR · HIPAA · SOC2 · EU-AI-Act · FedRAMP compliance fields</li>
           <li><span class="check-mark" aria-hidden="true">✓</span> Framework mapping guides: LangGraph, AutoGen, CrewAI, Semantic Kernel</li>
@@ -1147,6 +1174,70 @@
   <span class="k">compliance</span>: <span class="br">[</span><span class="s">"GDPR"</span>, <span class="s">"EU-AI-Act"</span><span class="br">]</span></pre>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- ═══ Composition ══════════════════════════════════════════════ -->
+<section id="composition">
+  <div class="container">
+    <div style="text-align:center; margin-bottom:3rem;">
+      <span class="label">Inherit · Override · Compose</span>
+      <h2>One base, many environments</h2>
+      <p class="sub" style="margin:0 auto;">
+        Extend base agents like Helm's <code style="font-family:var(--mono);font-size:0.85em;color:var(--sky)">values.yaml</code>.
+        Specify only what changes — model, endpoint, service name.
+        Every unmentioned field is inherited as-is.
+      </p>
+    </div>
+    <div class="comp-split">
+      <div class="code-window" style="max-width:none;">
+        <div class="win-bar">
+          <span class="dot d-r" aria-hidden="true"></span>
+          <span class="dot d-y" aria-hidden="true"></span>
+          <span class="dot d-g" aria-hidden="true"></span>
+          <span class="win-title">base.yaml</span>
+        </div>
+<pre><span class="k">adp_version</span>: <span class="s">"0.3.0"</span>
+<span class="k">id</span>: <span class="s">"agent.billing"</span>
+
+<span class="k">runtime</span>:
+  <span class="k">models</span>:
+    <span class="d">-</span> <span class="k">id</span>: <span class="s">"gpt4"</span>
+      <span class="k">model</span>: <span class="s">"gpt-4o-mini"</span>
+      <span class="k">temperature</span>: <span class="n">0.7</span>
+    <span class="d">-</span> <span class="k">id</span>: <span class="s">"guard"</span>
+      <span class="k">model</span>: <span class="s">"claude-3-haiku"</span>
+
+<span class="k">telemetry</span>:
+  <span class="k">service_name</span>: <span class="s">"billing-dev"</span></pre>
+      </div>
+
+      <div class="code-window" style="max-width:none;">
+        <div class="win-bar">
+          <span class="dot d-r" aria-hidden="true"></span>
+          <span class="dot d-y" aria-hidden="true"></span>
+          <span class="dot d-g" aria-hidden="true"></span>
+          <span class="win-title">prod.overlay.yaml</span>
+        </div>
+<pre><span class="k">adp_version</span>: <span class="s">"0.3.0"</span>
+<span class="k">id</span>: <span class="s">"agent.billing.prod"</span>
+<span class="k">extends</span>: <span class="s">"./base.yaml"</span>
+
+<span class="k">runtime</span>:
+  <span class="k">models</span>:
+    <span class="d">-</span> <span class="k">id</span>: <span class="s">"gpt4"</span>       <span class="cm"># matched by id</span>
+      <span class="k">model</span>: <span class="s">"gpt-4o"</span> <span class="cm"># ← only this changes</span>
+    <span class="cm"># guard: inherited unchanged</span>
+
+<span class="k">telemetry</span>:
+  <span class="k">service_name</span>: <span class="s">"billing-prod"</span></pre>
+      </div>
+    </div>
+    <p class="comp-caption">
+      Id-keyed merge: list entries matched by <code style="font-family:var(--mono);font-size:0.85em;color:var(--sky)">id</code>.
+      Unmentioned base entries are kept intact. Unknown ids are appended.
+      No index-path fragility — the overlay mirrors the structure it targets.
+    </p>
   </div>
 </section>
 

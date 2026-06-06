@@ -60,9 +60,10 @@ def _resolve_manifest(
         base_resolved = _resolve_manifest(base_raw, abs_uri, seen, depth + 1, resolver)
         merged = _deep_merge(merged, base_resolved)
 
-    # Apply local fields over the extended base (RFC 7396 — local wins, arrays replace)
+    # Apply local fields over the extended base using id-keyed merge semantics:
+    # objects deep-merge; id-carrying lists merge by id; other lists replace.
     local = {k: v for k, v in data.items() if k not in ("extends", "import", "overrides")}
-    merged = _deep_merge(merged, local)
+    merged = _apply_patch(merged, local)
 
     # Apply imports additively AFTER local so both local and imported arrays coexist
     for entry in data.get("import", []):
@@ -77,6 +78,42 @@ def _resolve_manifest(
         merged = _apply_override(merged, override)
 
     return merged
+
+
+def _apply_patch(base: dict, patch: dict) -> dict:
+    """Structural patch: objects deep-merge; id-keyed lists merge by id; other lists replace."""
+    result = copy.deepcopy(base)
+    for key, val in patch.items():
+        if val is None:
+            result.pop(key, None)
+        elif isinstance(val, dict) and isinstance(result.get(key), dict):
+            result[key] = _apply_patch(result[key], val)
+        elif isinstance(val, list) and isinstance(result.get(key), list):
+            if val and all(isinstance(i, dict) and "id" in i for i in val):
+                result[key] = _id_keyed_merge(result[key], val)
+            else:
+                result[key] = copy.deepcopy(val)
+        else:
+            result[key] = copy.deepcopy(val)
+    return result
+
+
+def _id_keyed_merge(base_list: list, patch_list: list) -> list:
+    """Merge two lists by id. Matched entries deep-patched; unknowns appended; unmatched base kept."""
+    result = copy.deepcopy(base_list)
+    index = {item["id"]: i for i, item in enumerate(result)
+             if isinstance(item, dict) and "id" in item}
+    for patch_item in patch_list:
+        if isinstance(patch_item, dict) and "id" in patch_item:
+            if patch_item["id"] in index:
+                result[index[patch_item["id"]]] = _apply_patch(
+                    result[index[patch_item["id"]]], patch_item
+                )
+            else:
+                result.append(copy.deepcopy(patch_item))
+        else:
+            result.append(copy.deepcopy(patch_item))
+    return result
 
 
 def _deep_merge(base: dict, overlay: dict) -> dict:

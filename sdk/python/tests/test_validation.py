@@ -701,3 +701,62 @@ x_testing:
     assert not any("evaluator_ref" in e for e in errors), \
         f"Expected evaluator_ref j1 to resolve via judges[], got: {errors}"
 
+
+
+# ---- AgentSpec Interop Checks (AS-1, AS-2, AS-3) ----
+
+def _make_minimal_adp(extra: dict = None) -> ADP:
+    base = {
+        "adp_version": "0.3.0",
+        "id": "test.agent",
+        "runtime": {"execution": [{"id": "py", "backend": "python", "entrypoint": "app:main"}]},
+        "flow": {
+            "id": "f",
+            "graph": {
+                "nodes": [{"id": "input", "kind": "input"}],
+                "edges": [],
+                "start_nodes": ["input"],
+                "end_nodes": ["input"],
+            },
+        },
+        "evaluation": {"suites": [{"id": "s", "metrics": [{"id": "m", "type": "deterministic", "function": "noop", "scoring": "boolean", "threshold": True}]}]},
+    }
+    if extra:
+        base.update(extra)
+    return ADP.model_validate(base)
+
+
+def test_as1_node_map_unknown_node():
+    adp = _make_minimal_adp({"interop": {"agentspec": {"node_map": {"ghost-node": "3a5bf0c0-9f28-47d8-a000-111111111111"}}}})
+    errors = validate_adp_semantics(adp)
+    assert any("ghost-node" in e and "node_map" in e for e in errors), f"Expected AS-1 error, got: {errors}"
+
+
+def test_as1_node_map_valid():
+    adp = _make_minimal_adp({"interop": {"agentspec": {"node_map": {"input": "3a5bf0c0-9f28-47d8-a000-111111111111"}}}})
+    errors = validate_adp_semantics(adp)
+    assert not any("node_map" in e for e in errors), f"Unexpected AS-1 error: {errors}"
+
+
+def test_as2_llm_map_unknown_backend():
+    adp = _make_minimal_adp({"interop": {"agentspec": {"llm_map": [{"backend_id": "ghost-backend", "agentspec_id": "3a5bf0c0-9f28-47d8-a000-111111111111"}]}}})
+    errors = validate_adp_semantics(adp)
+    assert any("ghost-backend" in e and "llm_map" in e for e in errors), f"Expected AS-2 error, got: {errors}"
+
+
+def test_as2_llm_map_valid():
+    adp = _make_minimal_adp({"interop": {"agentspec": {"llm_map": [{"backend_id": "py", "agentspec_id": "3a5bf0c0-9f28-47d8-a000-111111111111"}]}}})
+    errors = validate_adp_semantics(adp)
+    assert not any("llm_map" in e for e in errors), f"Unexpected AS-2 error: {errors}"
+
+
+def test_as3_ref_path_traversal():
+    adp = _make_minimal_adp({"interop": {"agentspec": {"ref": "../../etc/passwd"}}})
+    errors = validate_adp_semantics(adp)
+    assert any("path traversal" in e for e in errors), f"Expected AS-3 error, got: {errors}"
+
+
+def test_as3_ref_valid():
+    adp = _make_minimal_adp({"interop": {"agentspec": {"ref": "./agent.agentspec.yaml"}}})
+    errors = validate_adp_semantics(adp)
+    assert not any("path traversal" in e for e in errors), f"Unexpected AS-3 error: {errors}"

@@ -17,6 +17,11 @@ packages = ["adp_sdk", "adp_sdk.integrations"]
 [tool.pytest.ini_options]
 addopts = "--cov=adp_sdk --cov-report=term-missing --cov-fail-under=100"
 
+[dependency-groups]
+dev = [
+    "pytest-cov>=7.1.0",
+]
+
 [project.optional-dependencies]
 test = ["pytest", "pytest-cov"]
 langgraph = ["langgraph>=0.2"]

@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use serde_json::Value as JsonValue;
@@ -84,7 +84,8 @@ fn resolve_manifest(
         merged = deep_merge(merged, base_resolved);
     }
 
-    // 2. Apply local fields (excluding composition keys)
+    // 2. Apply local fields using id-keyed merge semantics:
+    // objects deep-merge; id-carrying lists merge by id; other lists replace.
     let local: serde_json::Map<String, JsonValue> = data
         .as_object()
         .map(|m| {
@@ -94,7 +95,7 @@ fn resolve_manifest(
                 .collect()
         })
         .unwrap_or_default();
-    merged = deep_merge(merged, JsonValue::Object(local));
+    merged = apply_patch(merged, JsonValue::Object(local));
 
     // 3. Additive import merge
     if let Some(imports) = data.get("import").and_then(|v| v.as_array()) {
@@ -162,6 +163,80 @@ fn deep_merge(base: JsonValue, overlay: JsonValue) -> JsonValue {
         }
         (_, overlay) => overlay,
     }
+}
+
+/// Apply structural patch: objects deep-merge; id-keyed lists merge by id; other lists replace.
+fn apply_patch(base: JsonValue, patch: JsonValue) -> JsonValue {
+    match (base, patch) {
+        (JsonValue::Object(mut base_map), JsonValue::Object(patch_map)) => {
+            for (k, v) in patch_map {
+                if v.is_null() {
+                    base_map.remove(&k);
+                } else if v.is_object() {
+                    let base_val = base_map
+                        .remove(&k)
+                        .unwrap_or_else(|| JsonValue::Object(serde_json::Map::new()));
+                    base_map.insert(k, apply_patch(base_val, v));
+                } else {
+                    match v {
+                        JsonValue::Array(patch_arr) => {
+                            match base_map.remove(&k) {
+                                Some(JsonValue::Array(base_arr)) => {
+                                    if all_have_id(&patch_arr) {
+                                        base_map.insert(k, id_keyed_merge(base_arr, patch_arr));
+                                    } else {
+                                        base_map.insert(k, JsonValue::Array(patch_arr));
+                                    }
+                                }
+                                _ => {
+                                    base_map.insert(k, JsonValue::Array(patch_arr));
+                                }
+                            }
+                        }
+                        other => {
+                            base_map.insert(k, other);
+                        }
+                    }
+                }
+            }
+            JsonValue::Object(base_map)
+        }
+        (_, patch) => patch,
+    }
+}
+
+/// Merge two arrays by "id" field. Matched entries deep-patched; unknowns appended; unmatched base kept.
+fn id_keyed_merge(base_list: Vec<JsonValue>, patch_list: Vec<JsonValue>) -> JsonValue {
+    let mut result = base_list;
+    let mut index: HashMap<String, usize> = HashMap::new();
+    for (i, item) in result.iter().enumerate() {
+        if let Some(id) = item.get("id").and_then(|v| v.as_str()) {
+            index.insert(id.to_string(), i);
+        }
+    }
+    for patch_item in patch_list {
+        let id_opt: Option<String> = patch_item
+            .get("id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        match id_opt {
+            Some(id) => {
+                if let Some(&idx) = index.get(&id) {
+                    let base_entry = std::mem::replace(&mut result[idx], JsonValue::Null);
+                    result[idx] = apply_patch(base_entry, patch_item);
+                } else {
+                    result.push(patch_item);
+                }
+            }
+            None => result.push(patch_item),
+        }
+    }
+    JsonValue::Array(result)
+}
+
+/// Returns true iff the list is non-empty and every element is an object with an "id" key.
+fn all_have_id(list: &[JsonValue]) -> bool {
+    !list.is_empty() && list.iter().all(|item| item.is_object() && item.get("id").is_some())
 }
 
 /// Additive merge: arrays append; objects recurse; scalars: module wins.
@@ -1246,5 +1321,130 @@ evaluation:
         let result = resolve_adp(child_path.to_str().unwrap(), None);
         assert!(result.is_ok(), "extends via filesystem should work: {:?}", result.err());
         assert_eq!(result.unwrap().id, "child");
+    }
+
+    // -----------------------------------------------------------------------
+    // Id-keyed merge unit tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_apply_patch_object_deep_merge() {
+        let base = serde_json::json!({"a": {"x": 1, "y": 2}, "b": "keep"});
+        let patch = serde_json::json!({"a": {"x": 99}});
+        let result = apply_patch(base, patch);
+        assert_eq!(result["a"]["x"], 99);
+        assert_eq!(result["a"]["y"], 2, "unpatched key must be kept");
+        assert_eq!(result["b"], "keep");
+    }
+
+    #[test]
+    fn test_apply_patch_adds_missing_key() {
+        let base = serde_json::json!({"a": 1});
+        let patch = serde_json::json!({"b": 2});
+        let result = apply_patch(base, patch);
+        assert_eq!(result["a"], 1);
+        assert_eq!(result["b"], 2);
+    }
+
+    #[test]
+    fn test_apply_patch_list_id_keyed_match() {
+        let base = serde_json::json!({"models": [{"id": "gpt4", "model": "gpt-4"}, {"id": "claude", "model": "claude-3"}]});
+        let patch = serde_json::json!({"models": [{"id": "gpt4", "model": "gpt-4o"}]});
+        let result = apply_patch(base, patch);
+        let models = result["models"].as_array().unwrap();
+        assert_eq!(models.len(), 2, "both entries must be present");
+        let gpt4 = models.iter().find(|m| m["id"] == "gpt4").unwrap();
+        assert_eq!(gpt4["model"], "gpt-4o", "matched entry must be updated");
+        let claude = models.iter().find(|m| m["id"] == "claude").unwrap();
+        assert_eq!(claude["model"], "claude-3", "unmatched base entry must be kept");
+    }
+
+    #[test]
+    fn test_apply_patch_list_id_keyed_new_entry() {
+        let base = serde_json::json!({"models": [{"id": "gpt4", "model": "gpt-4"}]});
+        let patch = serde_json::json!({"models": [{"id": "llama", "model": "llama-3"}]});
+        let result = apply_patch(base, patch);
+        let models = result["models"].as_array().unwrap();
+        assert_eq!(models.len(), 2, "unknown id must be appended");
+        assert!(models.iter().any(|m| m["id"] == "gpt4"));
+        assert!(models.iter().any(|m| m["id"] == "llama"));
+    }
+
+    #[test]
+    fn test_apply_patch_list_no_id_replaces() {
+        let base = serde_json::json!({"tags": ["a", "b"]});
+        let patch = serde_json::json!({"tags": ["c"]});
+        let result = apply_patch(base, patch);
+        let tags = result["tags"].as_array().unwrap();
+        assert_eq!(tags.len(), 1, "list without id must replace entirely");
+        assert_eq!(tags[0], "c");
+    }
+
+    #[test]
+    fn test_apply_patch_null_removes_key() {
+        let base = serde_json::json!({"a": 1, "b": 2});
+        let patch = serde_json::json!({"b": null});
+        let result = apply_patch(base, patch);
+        assert_eq!(result["a"], 1);
+        assert!(result.get("b").is_none() || result["b"].is_null());
+    }
+
+    #[test]
+    fn test_extends_local_id_keyed_e2e() {
+        // End-to-end: child uses local id-keyed list field to update one model entry.
+        let mut files: HashMap<String, String> = HashMap::new();
+        let base = r#"adp_version: "0.1.0"
+id: "base"
+runtime:
+  execution:
+    - id: "r1"
+      backend: "python"
+      entrypoint: "agent.main:app"
+  models:
+    - id: "gpt4"
+      provider: "openai"
+      model: "gpt-4"
+    - id: "claude"
+      provider: "anthropic"
+      model: "claude-3"
+flow:
+  id: "base.flow"
+  graph:
+    nodes:
+      - id: "n1"
+        kind: "input"
+    edges: []
+    start_nodes: ["n1"]
+    end_nodes: ["n1"]
+evaluation:
+  suites:
+    - id: "s1"
+      metrics:
+        - id: "m1"
+          type: "deterministic"
+          function: "noop"
+          scoring: "boolean"
+          threshold: true
+"#.to_string();
+        let child = r#"adp_version: "0.1.0"
+id: "child"
+extends: "base"
+runtime:
+  models:
+    - id: "gpt4"
+      model: "gpt-4o"
+"#.to_string();
+        files.insert("base".to_string(), base);
+        files.insert("child".to_string(), child);
+
+        let result = resolve_adp("child", Some(make_resolver(files)));
+        assert!(result.is_ok(), "Expected Ok, got: {:?}", result.err());
+        let adp = result.unwrap();
+        let models = adp.runtime.models.expect("models should be inherited");
+        assert_eq!(models.len(), 2, "both base models must be present");
+        let gpt4 = models.iter().find(|m| m.id == "gpt4").expect("gpt4 must be present");
+        assert_eq!(gpt4.model, "gpt-4o", "gpt4 model must be updated");
+        let claude = models.iter().find(|m| m.id == "claude").expect("claude must be present");
+        assert_eq!(claude.model, "claude-3", "claude must be unchanged");
     }
 }

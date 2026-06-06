@@ -166,14 +166,14 @@ def test_extends_merges_objects():
     assert len(adp.guardrails.input) == 1
 
 
-def test_extends_arrays_replace():
-    """RFC 7396: evaluation.suites in child replaces base suites entirely (not appended)."""
+def test_extends_id_list_unknown_entry_appended():
+    """Id-keyed merge: child suite with unknown id is appended; base suite is kept."""
     resolver = _make_resolver({"/base.yaml": _BASE_YAML, "/child_override_eval.yaml": _CHILD_OVERRIDE_EVAL_YAML})
     adp = resolve_adp("/child_override_eval.yaml", resolver=resolver)
     data = adp.model_dump(by_alias=True, exclude_none=True)
     suite_ids = [s["id"] for s in data.get("evaluation", {}).get("suites", [])]
-    assert suite_ids == ["new-suite"], f"RFC 7396 must replace base array; got {suite_ids}"
-    assert "safety" not in suite_ids, "base safety suite must be replaced, not appended"
+    assert "safety" in suite_ids, "base safety suite must be kept (unmatched base entries retained)"
+    assert "new-suite" in suite_ids, "child new-suite must be appended (unknown id)"
 
 
 def test_extends_cycle_detection():
@@ -462,3 +462,137 @@ def test_resolve_uri_registry_scheme_raises():
     from adp_sdk.composition import _resolve_uri, CompositionError
     with pytest.raises(CompositionError, match="registry://"):
         _resolve_uri("registry://some-agent/1.0", "/base/path.yaml")
+
+
+# ---------------------------------------------------------------------------
+# Id-keyed (structural) merge tests — local fields and _apply_patch
+# ---------------------------------------------------------------------------
+
+def test_local_object_deep_merge():
+    """Local fields: object keys deep-merge; unmentioned keys are inherited."""
+    from adp_sdk.composition import _apply_patch
+    base = {"a": {"x": 1, "y": 2}, "b": "keep"}
+    result = _apply_patch(base, {"a": {"x": 99}})
+    assert result == {"a": {"x": 99, "y": 2}, "b": "keep"}
+
+
+def test_local_adds_missing_key():
+    """Local fields: key absent from base is added."""
+    from adp_sdk.composition import _apply_patch
+    base = {"existing": "value"}
+    result = _apply_patch(base, {"new_key": {"nested": True}})
+    assert result["new_key"] == {"nested": True}
+    assert result["existing"] == "value"
+
+
+def test_local_list_id_keyed_match():
+    """Local id-carrying list: matched entry updated in-place; other base entries kept."""
+    from adp_sdk.composition import _apply_patch
+    base = {"models": [{"id": "gpt4", "model": "gpt-4"}, {"id": "claude", "model": "claude-3"}]}
+    result = _apply_patch(base, {"models": [{"id": "gpt4", "model": "gpt-4o"}]})
+    assert result["models"] == [{"id": "gpt4", "model": "gpt-4o"}, {"id": "claude", "model": "claude-3"}]
+
+
+def test_local_list_id_keyed_new_entry():
+    """Local id-carrying list: unknown id appended; existing entries untouched."""
+    from adp_sdk.composition import _apply_patch
+    base = {"models": [{"id": "gpt4", "model": "gpt-4"}]}
+    result = _apply_patch(base, {"models": [{"id": "new-model", "model": "llama-3"}]})
+    assert len(result["models"]) == 2
+    assert result["models"][0] == {"id": "gpt4", "model": "gpt-4"}
+    assert result["models"][1] == {"id": "new-model", "model": "llama-3"}
+
+
+def test_local_list_no_id_replaces():
+    """Local list without ids: entire base list replaced."""
+    from adp_sdk.composition import _apply_patch
+    base = {"tags": ["a", "b", "c"]}
+    result = _apply_patch(base, {"tags": ["x", "y"]})
+    assert result["tags"] == ["x", "y"]
+
+
+def test_local_null_removes_key():
+    """Local null value removes a key from the merged result."""
+    from adp_sdk.composition import _apply_patch
+    base = {"keep": "yes", "remove": "this"}
+    result = _apply_patch(base, {"remove": None})
+    assert "remove" not in result
+    assert result["keep"] == "yes"
+
+
+def test_extends_local_field_and_overrides():
+    """Extends + local field (id-keyed merge) + override: override wins on same key."""
+    import yaml as _yaml
+    from adp_sdk.composition import _resolve_manifest
+    base_yaml = _yaml.dump({
+        "adp_version": "0.3.0", "id": "base",
+        "runtime": {"execution": [{"id": "py", "backend": "python", "entrypoint": "a:b"}]},
+        "telemetry": {"service_name": "original", "protocol": "grpc"},
+    })
+    manifest = {
+        "adp_version": "0.3.0", "id": "child",
+        "extends": "/base.yaml",
+        "telemetry": {"service_name": "local-value"},
+        "overrides": [{"path": "/telemetry/service_name", "value": "overridden", "op": "set"}],
+    }
+    def resolver(uri: str) -> str:
+        return base_yaml
+    result = _resolve_manifest(manifest, "/child.yaml", set(), 0, resolver)
+    assert result["telemetry"]["service_name"] == "overridden"
+    assert result["telemetry"]["protocol"] == "grpc"
+
+
+def test_extends_local_field_different_keys():
+    """Extends + local field on different key from override: both applied correctly."""
+    import yaml as _yaml
+    from adp_sdk.composition import _resolve_manifest
+    base_yaml = _yaml.dump({
+        "adp_version": "0.3.0", "id": "base",
+        "runtime": {"execution": [{"id": "py", "backend": "python", "entrypoint": "a:b"}]},
+        "telemetry": {"service_name": "base-name", "protocol": "grpc"},
+    })
+    manifest = {
+        "adp_version": "0.3.0", "id": "child",
+        "extends": "/base.yaml",
+        "telemetry": {"service_name": "local-name"},
+        "overrides": [{"path": "/telemetry/protocol", "value": "http/protobuf", "op": "set"}],
+    }
+    def resolver(uri: str) -> str:
+        return base_yaml
+    result = _resolve_manifest(manifest, "/child.yaml", set(), 0, resolver)
+    assert result["telemetry"]["service_name"] == "local-name"
+    assert result["telemetry"]["protocol"] == "http/protobuf"
+
+
+def test_extends_id_list_full_pipeline():
+    """Extends + local id-list + import + overrides: all active, correct result."""
+    import yaml as _yaml
+    from adp_sdk.composition import _resolve_manifest
+    base = {
+        "adp_version": "0.3.0", "id": "base",
+        "runtime": {"execution": [{"id": "py", "backend": "python", "entrypoint": "a:b"}]},
+        "telemetry": {"service_name": "base-svc", "protocol": "grpc"},
+        "models": [{"id": "m1", "provider": "openai", "model": "gpt-4"}],
+    }
+    module = {"models": [{"id": "m2", "provider": "anthropic", "model": "claude-3"}]}
+
+    files = {
+        "/base.yaml": _yaml.dump(base),
+        "/module.yaml": _yaml.dump(module),
+    }
+
+    manifest = {
+        "adp_version": "0.3.0", "id": "child",
+        "extends": "/base.yaml",
+        "import": [{"id": "extra-models", "from": "/module.yaml"}],
+        "telemetry": {"service_name": "local-svc"},
+        "overrides": [{"path": "/telemetry/protocol", "value": "http/protobuf", "op": "set"}],
+    }
+
+    def resolver(uri: str) -> str:
+        return files[uri]
+
+    result = _resolve_manifest(manifest, "/child.yaml", set(), 0, resolver)
+    assert result["telemetry"]["service_name"] == "local-svc"
+    assert result["telemetry"]["protocol"] == "http/protobuf"
+    assert any(m.get("id") == "m2" for m in result["models"])

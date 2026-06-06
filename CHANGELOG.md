@@ -7,6 +7,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ### Added
 
+**Id-keyed local field merge** — Local fields in a manifest with `extends:` now use id-keyed merge semantics instead of RFC 7396 array-replace:
+- Objects deep-merge recursively (local wins on scalar collisions); absent keys added; `null` removes a key
+- Lists where **all** local items carry `id` merge by id (matched entries patched in-place; unmatched base entries kept; unknown ids appended); any no-id item triggers full list replacement
+- Applies at step 2 of the resolution pipeline (after `extends`, before `import` and `overrides:`); `overrides:` retains the final word
+- Valid for all `adp_version` values; no manifest changes required
+- Spec: `spec/adp-v0.3.0-composition.md`; implemented in Python, Go, TypeScript, and Rust SDKs
+
 **SDK framework integrations** — `adp_sdk.integrations.*` optional subpackage:
 - `adp_sdk.integrations.langgraph` — ADP↔LangGraph round-trip; exports `build_langgraph_from_adp`, `adp_from_langgraph`, `make_condition_fn`, `resolve_backend`, `ADPState`, `COMPAT_MATRIX`
 - `adp_sdk.integrations.autogen` — ADP→AutoGen (pyautogen >= 0.4 / `autogen_agentchat`); rewritten for new API (`AssistantAgent`, `RoundRobinGroupChat`, `SelectorGroupChat`)
