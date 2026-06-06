@@ -37,7 +37,7 @@ More precisely: ADP provides the **agent harness** — the portable, framework-n
 ## What it looks like
 
 ```yaml
-adp_version: "0.1.0"
+adp_version: "0.3.0"
 id: "agent.acme.analytics"
 conformance_class: "full"
 
@@ -111,6 +111,40 @@ pytest -v
 
 ---
 
+## Composition
+
+Manifests compose via `extends`, `import`, `patch`, and `overrides`. The `patch:` field lets you override named entries structurally — no fragile index paths.
+
+**Base manifest** (`billing-base.yaml`):
+```yaml
+adp_version: "0.3.0"
+id: "agent.acme.billing"
+runtime:
+  models:
+    - { id: "gpt4", provider: "openai", model: "gpt-4o-mini" }
+telemetry:
+  service_name: "billing-dev"
+```
+
+**Overlay** (`billing-prod.yaml`):
+```yaml
+adp_version: "0.3.0"
+id: "agent.acme.billing.prod"
+extends: "./billing-base.yaml"
+
+patch:
+  runtime:
+    models:
+      - id: "gpt4"
+        model: "gpt-4o"        # upgrade model; other fields inherited
+  telemetry:
+    service_name: "billing-prod"
+```
+
+Resolution order: `extends` → local fields → `import` → `patch` → `overrides`. See [`spec/adp-v0.3.0-composition.md`](spec/adp-v0.3.0-composition.md).
+
+---
+
 ## Where it fits
 
 ```mermaid
@@ -133,11 +167,12 @@ ADP references existing protocols — it doesn't replace them. MCP handles tool 
 
 | Component | Description | Location |
 |---|---|---|
-| **ADP spec** | Identity, runtime, flow, evaluation, governance | [`spec/adp-v0.1.0.md`](spec/adp-v0.1.0.md) |
+| **ADP spec v0.3.0** | Identity, runtime, flow, evaluation, governance, workspace, sandbox, memory, guardrails, observability, loops, tools, adapters, artifacts | [`spec/adp-v0.3.0.md`](spec/adp-v0.3.0.md) |
+| **Composition** | `extends`, `import`, `patch` (id-keyed merge), `overrides` | [`spec/adp-v0.3.0-composition.md`](spec/adp-v0.3.0-composition.md) |
 | **Execution Semantics (ESP)** | Per-node state rules (D1–D7), condition expressions | [`spec/esp.md`](spec/esp.md) |
 | **Runtime-flow binding** | Backend compatibility matrix, `runtime_ref` resolution | [`spec/runtime-flow-binding.md`](spec/runtime-flow-binding.md) |
 | **Framework interop guide** | LangGraph / AutoGen / SK / CrewAI mapping | [`spec/framework-interop.md`](spec/framework-interop.md) |
-| **JSON Schemas** | 6 schemas, hosted on GitHub Pages | [`schemas/`](schemas/) |
+| **JSON Schemas** | Schemas hosted on GitHub Pages | [`schemas/`](schemas/) |
 | **SDKs** | validate / pack / unpack — Python · TS · Rust · Go | [`sdk/`](sdk/) |
 | **Conformance harness** | 7 runner scenarios, CI dry-run mode | [`scripts/esp-runner-harness.py`](scripts/esp-runner-harness.py) |
 | **LangGraph example** | ADP ↔ LangGraph round-trip pytest suite | [`examples/runners/langgraph/`](examples/runners/langgraph/) |
@@ -149,7 +184,7 @@ ADP references existing protocols — it doesn't replace them. MCP handles tool 
 
 | | |
 |---|---|
-| Spec entry point | [`spec/adp-v0.1.0.md`](spec/adp-v0.1.0.md) |
+| Spec entry point | [`spec/adp-v0.3.0.md`](spec/adp-v0.3.0.md) |
 | Spec index | [`spec/README.md`](spec/README.md) |
 | Roadmap | [`roadmap.md`](roadmap.md) |
 | Examples | [`examples/`](examples/) |
