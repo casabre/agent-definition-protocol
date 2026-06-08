@@ -13,9 +13,13 @@
 
 ---
 
+**Not BYOLLM (bring your own LLM) — BYOA (bring your own agent).**
+
 You built an agent in LangGraph. It works. Now someone asks: "Can we run this in production? Can we evaluate it in CI? Can the other team use it with AutoGen?"
 
 Suddenly you're digging through framework internals to answer basic questions — what model does it use, what tools, how is it evaluated, how do I package it for the registry.
+
+BYOLLM solved the wrong problem. Swapping the LLM is easy. Moving the *agent* — its runtime, flow graph, evaluation criteria, safety posture, and packaging — is what breaks teams. ADP makes agents the swappable element, not LLM models — that's BYOA.
 
 **ADP is the OpenAPI for AI agents.** One YAML manifest declares your agent's runtime, flow graph, evaluation criteria, and packaging metadata. Frameworks and runners consume it. You move the agent without rewriting glue.
 
